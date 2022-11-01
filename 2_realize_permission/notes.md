@@ -89,5 +89,57 @@ to 'c' begining : character device file.(keyboard and monitor)
 to 'b' begining : block device file.(disk)
 to 'p' begining : pipe file.(communication)
 to 'l' begining : link file.(soft connection)
+to 's' begining : socket file
 
+------
+edit permission:
+methods 1:
+chmod --> change mod
+chmod u/g/o +/- r/w/x filename
+u+g+o = a , chmod a+r filename = chomd u+r, g+r, o+r filename
+e.g.  chmod u+x filename ;
+also we can use chmod 777/666/000 filename to change the permission
 
+method 2:
+change owner and group:
+chown --> change owner
+we need use [sudo] to change owner : sudo chown root filename
+--chown can change owner and group in one instruction(:sudo chown root:root filename
+
+chgrp --> change group
+------
+the permission of directory:
+
+entering the directory needs what permission?  ---> x
+the permission of directories:
+r --> can use "ls", can see the names of files.
+w --> delete ,touch, or move files in the directory
+x --> enter the directory
+
+if other has 'w' permission for a directory, other can delete any files in the directory.(And also can touch files in the directory)
+BUT
+if owner wants others to touch files in a specific directory, but do not want them to delete any files that the owner creates/touchs :->
+sticky bit -->   change 'x' to 't'
+sudo chmod o+t directory_name   (only can use in directory name, generally use for other)
+
+there are many temporary system files in directory "/tmp" : if there are different users using Linux, Linux only wants them to delete the files that they create on their own, so _-->> sticky bit
+
+-----
+default permission:
+why default permissions of files in system created by us are what we see?
+
+THE DEFAULT PERMISSIONS: ordinary file : 666 / directory file : 777
+
+there is a 'umask' :->
+umask : permission mask --> any permissions that appear in the umask should be removed from the initial permissions.
+the umask in my Linux : 0002 --> binary) 000 000 010
+if our permissions are 110 110 110
+		       000 000 010
+		       110 110 100
+operation: default = default & ~(umask)   ( 
+~ : bitwise negation  
+& : bitwise AND)
+
+SO :	 ordinary permissions : 110 110 100
+   	 directory permissions : 111 111 101
+AND we can change the umask : [umask 0333]
