@@ -83,3 +83,63 @@ get into insert mode: [a(next char)]/[i(current char)]/[o(create a new line)]
 
 ~~~~~~~~~~~~~~~~~~~~~~~~VIM CONFIGURE~~~~~~~~~~~~~~~~~~~~~~
 vim configure is only influencing on the user who are changing the vim.
+
+--------------------------gcc/g++---------------------------------
+there are many steps in gcc
+1. preprocessing: gcc -E filename.c (make macro substitution,uncomment) -o filename.i  e.g. gcc -E test.c -o test.i
+2. compiling: gcc -S filename.i -o filename.s (generate assembly file)  
+ASK: can computer execute assembly language?/Does assembly language need translator?
+YES! Computers only know binary.
+3. compliation: (assembly file -> redirectable target file) gcc -c
+4. link: gcc test.o 
+languages also have their libraries.(head file and lib file, lib file--> libc.a,libc.so)
+we need link to their own libraries in translator.
+
+BUT generally, we do not need to sperate them,
+Only use : gcc test.c -o test  OR gcc -o test test.c
+
+LIBRARY: 
+static library : .a   (copy the code from library to executable program)
+dynamic library : .so 
+Linking is to associate what you wrote with the library.
+
+gcc use dynamic linking to form executable program by default.
+if we want to change dynamic way to static way, use gcc -o test test.c -static
+
+
+----------------------------gdb----------------------------
+debugging tools: gdb
+If a program can be debugging, there must be somthing about debug in the binary file of this program.
+By default, the executable program is "release" type.
+Use -g when using g++/gcc to change the "release" type into "debug" type.
+
+gdb : 
+r -run ->run the code
+l -list -> show the code
+b -breakpoint -> make a breakpoint  e.g. b 5  make a breakpoint at line 5
+info b  vrew the info aboot breakpoint
+d+num -delete breakpoint
+enable +num
+disalbe +num 
+c - continuing (running till the breakpoint)
+s - F11 (get in the function
+n - F10 (process by process)
+until - (untill), until line_num.
+
+p + variable -> print variable
+display +variable
+display + &variable 
+NOTE:display + variable] is always showing the info when press [s] or [n],use undisplay + line_num to close it.
+finish -run till exit from a current function.
+quit -quit gdb
+--------------------------make/makefile----------------------------------------------
+1. make is a command, makefile is a file.
+2. considering the dependencies between files.(which one is compiled firstly?)
+3. 
+dependency relation
+dependency method
+
+use Makefile to define dependency.
+when make scans makefile, it will only form a target dependency relation, by default, the first one.
+.PHONY : retouch(or modify) corresponding symbol, forming pseudo target (always can be executable).
+

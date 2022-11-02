@@ -2,7 +2,7 @@
 using namespace std;
 int main()
 {
-cout<<"hello vim!"<<endl;
-return 0;
+	cout<<"hello vim!"<<endl;
+	return 0;
 }
 
