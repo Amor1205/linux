@@ -1,22 +1,24 @@
 #pragma once
 #include <assert.h>
 #include <vector>
+#include <utility>
 
 namespace amor
 {
 	//by default : maxHeap
-	template<class T, class Container = vector<T>>
+	template<class T, class Container = std::vector<T>, class Compare = std::less<T> >
 	class priority_queue
 	{
 	private:
 		void adjust_up(size_t child)
 		{
+			Compare com;
 			size_t parent = (child - 1) / 2;
 			while(child > 0)
 			{
-				if(_con[child] > _con[parent])
+				if(com(_con[parent], _con[child]))
 				{
-					swap(_con[child], _con[parent]);
+					std::swap(_con[child], _con[parent]);
 					child = parent;
 					parent = (child - 1) / 2;
 
@@ -29,16 +31,17 @@ namespace amor
 		}
 		void adjust_down(size_t parent)
 		{
+			Compare com;
 			size_t child  = parent * 2 + 1;
 			while(child < _con.size())
 			{
-				if(child + 1 < _con.size() && _con[child + 1] > _con[child])
+				if(child + 1 < _con.size() && com(_con[child], _con[child+1]))
 				{
 					++child;
 				}
-				if(_con[child] > _con[parent])
+				if(com(_con[parent], _con[child]))
 				{
-					swap(_con[child], _con[parent]);
+					std::swap(_con[child], _con[parent]);
 					parent = child;
 					child  = parent + 1;
 				}
@@ -71,7 +74,7 @@ namespace amor
 		void pop()
 		{
 			assert(!_con.empty());
-			swap(_con[0], _con[_con.size() - 1]);
+			std::swap(_con[0], _con[_con.size() - 1]);
 			_con.pop_back();
 			adjust_down(0);
 		}
