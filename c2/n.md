@@ -263,4 +263,31 @@ So :
  base members use public & protected.
  inheritance way : public. 
 By default : private inheritance(base is public), public inheritance(base is struct)
- 
+
+AND : 
+for derived members, they can pass their value & address & reference to their base member.
+like:      child -> parent
+{
+	Person p;
+	Student s;
+	
+	p = s;
+	Person* ptr = &s;
+	Person& ref = s;
+} 
+It is called "assignment compatible"(or slice) (only public inheritance).
+there is no type conversion. (type conversion will generate temporary variable, must add const before s like this: const Person& ref = s)
+
+But : parent -------xxxxxxx---> child . can't do it.
+exception:
+{
+	//pointer:
+	Student* pptr = (Student*)&p;
+	//reference:
+	Student& rref = (Student&)p;
+	
+	//need coercion.
+	// risk of crossing the border.  ----very dangerous!
+}
+
+
