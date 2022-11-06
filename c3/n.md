@@ -131,4 +131,50 @@ In Assistant, it puts "Person" in a public location. So sometime Student or Teac
 need to calculate through the offset in the virtual base table to find "Person".
 virtual base table is stored in the location where "Person" was originally stored.(no "virtual" decoration)
 now this location is an address, pointing to the virtual base table.
+try not to define diamond inheritance
+
+C++:
+1. No garbage collection.
+2. Diamond inheritance.
+
+Inheritance & composition:
+1. Inheritance:
+class A
+{
+	int _a;
+};
+class B: public A
+{
+	int _b;
+};
+
+2. composition:
+class C
+{
+	int _c;
+};
+class D
+{
+	C c;
+	int _d;
+};
+
+They both can reuse other classes.
+
+DIfference:
+1. public-inheritance is a "is-a" relationship. That is to say every derived class object is a base-class object.
+2. Composition is a "has-a" relationship. If B composites with A, every B object has a A object.
+
+For example: Students are a special type of people.(use inheritance)
+	     Car has tires.(use composition)
+If compatible with both at the same time, use composition.
+
+Public inheritance : black-box reuse.
+Compostion : white-box reuse.
+inheritance destroys the package to a certain extent. (B can access protected & public members)
+But D can only use the public members of C, cannot access protected members.
+
+The relationship between classes & modules is preferably low coupling & high cohesion. -->easy maintenance.
+
+
 
