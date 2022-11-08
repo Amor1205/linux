@@ -42,7 +42,7 @@ class Car{
 		virtual void Drive() = 0;
 };
 
-class Base{
+/*class Base{
 public:
 	virtual void Func1(){
 		cout << "Func1()" << endl;
@@ -50,8 +50,24 @@ public:
 private:
 	int _b = 1;
 	char _ch = 'a';
+};*/
+class Base{
+	public: 
+		virtual void func1(){cout << "Base::func1()"<< endl;}
+		virtual void func2(){cout << "Base::func2()"<< endl;}
+	private:
+		int a = -1;
+};
+class Derive: public Base{
+	public: 
+		virtual void func1(){cout << "Derive::func1()"<< endl;}
+		virtual void func3(){cout << "Derive::func3()"<< endl;}
+		void func4(){cout << "Derive::func4()" << endl;}
+	private:
+		int b = -2;
 };
 
+/*
 int main()
 {
 //	Person ps;
@@ -68,5 +84,27 @@ int main()
 	Student Johnson;
 	Func(Johnson);
 
+	return 0;
+}
+
+*/
+
+typedef void(*VF_PTR)();
+void PrintVFtable(VF_PTR* table)
+{
+	for(int i = 0; i<= 4; ++i)
+	{
+		printf("vft[%d]:%p",i,table[i]);
+		//VF_PTR f = table[i];
+		//f();
+	}
+}
+
+
+int main(){
+	Base b;
+	PrintVFtable((VF_PTR*)(*(int*)&b));
+
+	Derive d;
 	return 0;
 }
