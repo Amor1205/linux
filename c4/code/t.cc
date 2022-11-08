@@ -4,10 +4,14 @@ using namespace std;
 class Person{
 	public:
 		virtual void BuyTicket(){cout << "full ticket" << endl;}
+	protected:
+		int _a;
 };
 class Student: public Person{
 	public:
 		virtual void BuyTicket(){cout << "half ticket" << endl;}
+	protected:
+		int _b;
 };
 void Func(Person& p)
 {
@@ -65,4 +69,4 @@ int main()
 	Func(Johnson);
 
 	return 0;
-}std
+}

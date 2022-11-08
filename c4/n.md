@@ -61,6 +61,22 @@ private:
 
 sizeof(Base)  --> 12 (Win32)   because : vfptr=4 + int=4 + char=1(fill up = 4) = 12
 
+vfptr : virtual function table pointer. pointing an array(function pointer array).
 
+the vfptr in derived class is different from the one in base class (it's rewriting vft);
+thinking that rewriting is covering.
+
+*the principle of polymorphism: the pointer or reference of base class, pointing someone and find and use the corresponding function in its virtual function table.*
+*remember : slice cannot change the vfptr. if use passing value, the vfptr will be changed.*
+
+*same type of objects, use same vfptr, pointing same address/ same virtual table.*
+
+normal functions and vitual functions are stored in the same places.
+*all in the code snippet*. But vitual functions will put their address in the vitual tables in order to realize polymorphism.
+
+if not the polymorphism: determine the address of a function at compile time.
+if polymorphism: determine the address of a virtual function at runtime.
+
+the virtual function table is stored in *constant area/code snippet* 
 
 
