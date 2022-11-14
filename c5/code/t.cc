@@ -177,6 +177,76 @@ public:
 	void get_root()const{
 		std::cout << "_root:>"<<_root->_key << std::endl;
 	}
+
+	bool _InsertR(Node*& root,const K& key){
+		if(!root){
+			root = new Node(key);
+			return true;
+		}
+		else{
+			if(root->_key < key){
+				return _InsertR(root->_right,key);
+			}else if(root->key > key){
+				return _InsertR(root->_left,key);
+			}else{
+				return false;
+			}
+		}
+	}
+	void InsertR(const K& key){
+		_InsertR(_root,key);
+	}
+
+	Node* _FindR(Node* root, const K& key){
+		if(root == nullptr){
+			return nullptr;
+		}else{
+			if(root->_key > key){
+				return _FindR(root->_left,key);
+			}
+			else if(root->_key < key){
+				return _FindR(root->_right,key);
+			}
+			else{
+				return root;
+			}
+		}
+	}
+	void FindR(const K& key){
+		_FindR(_root,key);
+	}
+
+	bool _EraseR(Node* root, const K& key){
+		if(!root){
+			return false;
+		}else{
+			if(root->_key < key){
+				return _EraseR(root->_right,key);
+			}else if(root->key > key){
+				return _EraseR(root->_left,key);
+			}else{
+				Node* del = root;
+				if(!root->_left){
+					root = root->_right;
+				}else if(!root->_right){
+					root = root->_left;
+				}else{
+					Node* right_min = root->_right;
+					while(right_min->_left){
+						right_min = right_min->_left;
+					}
+					swap(right_min->_key, root->_key);
+
+					_EraseR(root->_right, key);
+				}
+				delete del;
+			}
+		}
+	}
+	void EraseR(const K& key){
+		_EraseR(_root, key);
+	}
+
 private:
 	Node* _root;
 
