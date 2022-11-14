@@ -87,7 +87,7 @@ public:
 		return false;
 	}
 	
-	bool Erase(const K& key){
+/*	bool Erase(const K& key){
 		if(!Find(key)){
 			return false;
 		}
@@ -99,11 +99,31 @@ public:
 		}
 
 	}
+*/
 private:
 	Node* _root;
 
 
 };
+
+class A{
+	public:
+		virtual void func(int val = 1){
+			std::cout << "a->" << val << std::endl;
+		}
+		virtual void test(){
+			func();
+		}
+};
+class B: public A{
+	public: 
+		void func(int val = 0){
+			std::cout << "B->" << val << std::endl;
+		}
+};
+
+//comment: when virtual functions are rewritten, they inherit the virtual function interface of the parent function and rewrite the implementation of the virtual function.
+//here, use <func> in derived class, <val> in parent class.
 
 void test1(){
 	BSTree<int> t;
@@ -113,9 +133,13 @@ void test1(){
 	}
 	t.InOrder();
 }
-
+void test2(){
+	B* p = new B;
+	p->test();
+}
 
 int main(){
-	test1();
+	//test1();
+	test2();
 	return 0;
 }
