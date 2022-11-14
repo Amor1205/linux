@@ -87,19 +87,96 @@ public:
 		return false;
 	}
 	
-/*	bool Erase(const K& key){
-		if(!Find(key)){
-			return false;
-		}
-		else{
+	bool Erase(const K& key){
 			Node* cur = _root;
-			while(cur != ){
+			Node* parent = nullptr;
+			while(cur){
+				if(cur->_key > key){
+					parent = cur;
+					cur = cur->_left;
+				}
+				else if(cur->_key < key){
+					parent = cur ;
+					cur = cur->_right;
+				}
+				else{
+					//find.
+					if(!cur->_left){
+						if(!parent){
+							_root = cur->_right;
+						}
+						if(cur == parent->_left){
+							parent->_left = cur->_right;
+							
+						}
+						else{
+							parent->_right = cur->_right;
+						}
+						delete cur;
+					}
+					else if(!cur->_right){
+						if(!parent){
+							_root = cur->_left;
+						}
+						if(cur == parent->_left){
+							parent->_left = cur->_left;
+						}
+						else{
+							parent->_right = cur->_left;
+						}
+						delete cur;
+					}
+					else{
+						//substitution method. 
+						//find right tree -> leftmost node
+						/*
+						Node* current = cur;
+						Node* current_par = parent;
+						while(current->_left){
+							current_par = current;
+							current = current->_left;
+						}
+						current_par->_left = nullptr;
+						current->_left = cur->_left;
+						current->_right = cur->_right;
+						if(parent){
+							
+							if(parent->_left == cur){
+								parent->_left = current;
+							}
+							else{
+								parent->_right = current;
+							}
+						}
+						delete cur;
+						*/
+						
+						Node* right_min = cur->_right;
+						Node* right_min_par = cur;
+						while(right_min->_left){
+							right_min_par = right_min;
+							right_min = right_min->_left;
+						}
+						cur->_key = right_min->_key;
+						if(right_min_par->_left == right_min){
+							right_min_par->_left = right_min->_right;
+						}
+						else {
+							right_min_par->_right = right_min->_right;
+						}
+						delete right_min;
 
+
+					}
+
+					return true;
+				}
 			}
-		}
-
+		return false;	
 	}
-*/
+	void get_root()const{
+		std::cout << "_root:>"<<_root->_key << std::endl;
+	}
 private:
 	Node* _root;
 
@@ -131,7 +208,12 @@ void test1(){
 	for(auto e : a){
 		t.Insert(e);
 	}
+	t.get_root();
 	t.InOrder();
+	t.Erase(3);
+	std::cout << std::endl;
+	t.InOrder();
+	t.get_root();
 }
 void test2(){
 	B* p = new B;
@@ -139,7 +221,7 @@ void test2(){
 }
 
 int main(){
-	//test1();
-	test2();
+	test1();
+	//test2();
 	return 0;
 }
