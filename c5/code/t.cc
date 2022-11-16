@@ -474,6 +474,12 @@ public:
 			_InOrder(root->_right);
 		}
 	}
+
+	bool find_path(){
+		?????
+	}
+
+
 private:
 	Node* _root;
 
