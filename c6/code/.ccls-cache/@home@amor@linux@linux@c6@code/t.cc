@@ -2,6 +2,9 @@
 #include<set>
 #include<map>
 #include<string>
+#include<queue>
+#include<functional>
+#include<algorithm>
 using namespace std;
 void test_set1(){
 	set<int> s;
@@ -90,11 +93,15 @@ void test_map2(){
 		}
 	}
 */
-	for(auto& str : arr){
+	/*for(auto& str : arr){
 		auto kv = countM.insert(make_pair(str,1));
 		if(kv.second == false){
 			kv.first->second++;
 		}
+	}*/
+
+	for(auto& str : arr){
+		countM[str]++;
 	}
 	for(auto& kv : countM){
 		cout << kv.first << ":" << kv.second << " ";
@@ -105,9 +112,91 @@ void test_map2(){
 
 }
 
+void test_map3(){
+	map<string,string> dict;
+	dict.insert(make_pair("sort1","paixu1"));
+	dict.insert(make_pair("sort2","paixu2"));
+	dict.insert(make_pair("sort3","paixu3"));
+	dict.insert(make_pair("sort4","paixu4"));
+	dict.insert(make_pair("sort5","paixu5"));
+	dict["sort1"] = "hello";
+	dict["?"];
+	cout << dict["sort1"] << endl;
+
+}
+
+struct CountVal{
+	bool operator()(const pair<string,int>& l , const pair <string,int>& r){
+		return l.second > r.second;
+	}
+};
+void GetFavoruteFruit(const vector<string>& fruits, size_t k){
+	map<string,int> countMap;
+	for(auto& str: fruits){
+		countMap[str]++;
+	}
+
+	vector<pair<string,int>> sortV;
+	for(auto& kv : countMap){
+		sortV.push_back(kv);
+	}
+	sort(sortV.begin(),sortV.end(),CountVal());
+
+	for(int i = 0;i < k; ++i){
+		cout<< sortV[i].first << ":" << sortV[i].second << endl;
+	}
+}
+
+struct CountIterVal{
+	bool operator()(const map<string,int>::iterator& l, const map<string,int>::iterator& r){
+		return l->second > r->second;
+	}
+};
+void GetFavoruteFruit(const vector<string>& fruits, size_t k){
+	vector<map<string,int>::iterator> sortV;
+	auto it = countMap.begin();
+	while(it != countMap.end()){
+		sortv.push_back(it);
+		++it;
+	}
+
+	sort(sortV.begin(),sortV.end(),CountIterVal());
+	for(int i = 0; i<k; ++i){
+		cout<< sortV[i]->first << ":" << sortV[i].second << endl;
+	}
+	cout << endl;
+}
+
+void GetFavoruteFruit(const vector<string>& fruits, size_t k){
+	multimap<int ,string,greater> sortMap;
+	for(auto& kv : countMap){
+		sortMap.insert(make_pair(kv.second,kv.first));
+	}
+}
+void GetFavoruteFruit(const vector<string>& fruits, size_t k){
+	priority_queue<pair<string,int>,vector<pair<string,int>>,CountVal> pq;
+	for(auto& kv : countMap){
+		pq.push(kv);
+	}
+	while(k--){
+		cout << pq.top().first << endl;
+		pq.pop();
+	}
+	
+
+	priority_queue<map<string,int>::iterator, vector<map<string,int>::iterator>, CountIterVal> pq;
+	auto it = countMap.begin();
+	while(it != countMap.end()){
+		pq.push(it);
+		++it;
+	}
+}
 int main(){
 	//test_set1();
 	//test_multiset1();
-	test_map2();
+//	test_map3();
+
+	vector<string> v = {"apple","apple","banana","apple","cherry","cantaloupe","cantaloupe"};
+	GetFavoruteFruit(v,3);
 	return 0;
 }

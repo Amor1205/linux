@@ -39,3 +39,21 @@ when inserting ,if successful, return pair<newly inserted element iterator, true
 
 
 it->first & it->second for iteration. (range for or iterator)
+
+operator[] : 
+key_type : key 
+mapped_type : second template parameter.
+mapped_type& operator[](const key_type& k);
+
+the function of []:
+1. insert 2. search (value) 3. modify (value)
+insert: dict["string"] = "zifuchuan";
+
+how to find the most important value ? (the largest value.
+question of TopK ;
+small amount of data. --> sort
+large amount of data  --> multimap
+
+
+
+
