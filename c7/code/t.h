@@ -1,11 +1,14 @@
 #pragma once
-
-#include<stdio.h>
+#include<queue>
+#include<string>
+#include<vector>
+#include<functional>
+#include<iostream>
 #include<map>
 #include<set>
 #include<algorithm>
 #include<assert.h>
-
+using namespace std;
 template<class K, class V>
 struct  AVLTreeNode{
 	AVLTreeNode<K,V>* _left;
@@ -27,7 +30,7 @@ class AVLTree
 	typedef AVLTreeNode<K,V> Node;
 
 public:
-	ALVTree()
+	AVLTree()
 		:_root(nullptr)
 	{}
 
@@ -41,10 +44,10 @@ public:
 		while(cur){
 			if(cur->_kv.first < kv.first){
 				parent = cur;
-				cur = cur->right;
+				cur = cur->_right;
 			}else if(cur->_kv.first > kv.first){
 				parent = cur;
-				cur = cur->left;
+				cur = cur->_left;
 			}else{
 				return false;
 			}
@@ -52,11 +55,11 @@ public:
 
 		cur = new Node(kv);
 		if(parent->_kv.first < kv.first){
-			parent->right = cur;
+			parent->_right = cur;
 			cur->_parent = parent;
 		}
 		else{
-			parent->left = cur;
+			parent->_left = cur;
 			cur->_parent = parent;
 		}
 
@@ -66,7 +69,7 @@ public:
 		//2.if BF is invalid, spin the balance tree;
 		
 		while(parent){
-			if(cur == parent->left){
+			if(cur == parent->_left){
 				parent->_bf --;
 
 			}else{
@@ -82,7 +85,7 @@ public:
 			else if(parent->_bf == 1 || parent->_bf == -1){
 				//fresh up node;
 				cur = parent;
-				parent = parent->parent;
+				parent = parent->_parent;
 			}else if(parent->_bf == 2 || parent->_bf == -2){
 				//spin
 				if(parent->_bf == -2 && cur->_bf == -1){
@@ -91,11 +94,17 @@ public:
 				else if(parent->_bf == 2 && cur->_bf == 1){
 					RotateL(parent);
 				}
+				else if(parent->_bf == -2 && cur->_bf == 1){
+					RotateLR(parent);
+				}
+				else if(parent->_bf = 2 && cur->_bf == -1){
+					RotateRL(parent);
+				}
 				break;
 			}
 			else{
 				//HAVE PROBLEMS
-				assert(flase);
+				assert(false);
 			}
 		}
 	} 
@@ -113,7 +122,7 @@ public:
 
 		if(parent == _root){
 			_root = subL;
-			_root->parent = nullptr;
+			_root->_parent = nullptr;
 		}
 		else{
 			subL->_parent = PParent;
@@ -125,14 +134,14 @@ public:
 					PParent->_right = subL;
 				}
 			}
+		}
 			subL->_bf = 0;
 			parent->_bf = 0;
-		}
 	}
 	void RotateL(Node* parent){
 		Node* subR = parent->_right;
 		Node* subRL = subR->_left;
-		node* PParent = parent->_parent;
+		Node* PParent = parent->_parent;
 
 		parent->_right = subRL;
 		if(subRL){
@@ -155,11 +164,96 @@ public:
 						PParent->_right = subR;
 					}
 				}
-				subR->_bf = parent->_bf = 0;
 			}
+			subR->_bf = parent->_bf = 0;
+		}
+	}
+	void RotateLR(Node* parent){
+		Node* subL = parent->_left;
+		Node* subLR = subL->_right;
+		int bf = subLR->_bf;
+
+		RotateL(parent->_left);
+		RotateR(parent);
+
+		if(bf == 0){
+			subL->_bf = subLR->_bf = parent->_bf = 0;
+		}
+		else if(bf == -1){
+			parent->_bf = 1;
+			subL->_bf = subLR->_bf = 0;
+		}
+		else if(bf == 1){
+			subL->_bf = -1;
+			subLR->_bf = parent->_bf = 0;
+		}
+		else{
+			assert(false);
+		}
+	}
+	void RotateRL(Node* parent){
+		Node* subR = parent->_right;
+		Node* subRL = subR->_left;
+		int bf = subRL->_bf; // 1/-1/0
+
+		RotateR(parent->_right);
+		RotateL(parent);
+
+		if(bf == 0){
+			subR->_bf = subRL->_bf = parent->_bf = 0;
+		}
+		else if(bf == 1){
+			parent->_bf = -1;
+			subR->_bf = subRL->_bf = 0;
+		}
+		else if(bf == -1){
+			parent->_bf = 0;
+			subR->_bf = 1;
+			subRL->_bf = 0;
+		}else{
+			assert(false);
 		}
 	}
 
+	void InOrder(){
+		_InOrder(_root);
+	}
+	void _InOrder(Node* root){
+		if(root == nullptr)
+			return;
+		_InOrder(root->_left);
+		cout << root->_kv.first << ":" << root->_kv.second <<" :bf"<< root->_bf << endl;
+		_InOrder(root->_right);
+	}
+
+
+	int Height(Node* root){
+		if(root == nullptr){
+			return 0;
+		}
+		int leftHeight = Height(root->_left);
+		int rightHeight = Height(root->_right);
+
+		return leftHeight > rightHeight ? leftHeight+1 : rightHeight+1;
+	}
+
+	bool IsBalance(){
+		return _IsBalance(_root);
+	}
+	bool _IsBalance(Node* root){
+		if(root == nullptr){
+			return true;
+		}
+
+		//current Tree
+		int leftHeight = Height(root->_left);
+		int rightHeight = Height(root->_right);
+
+		return abs(rightHeight-leftHeight) < 2
+			&& _IsBalance(root->_left)
+			&& _IsBalance(root->_right);
+		//
+	}
 private:
-	Node* root;
+	Node* _root;
 };
