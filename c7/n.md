@@ -11,4 +11,6 @@ the meaning of spining
 1. balance the tree
 2. decrease the height by 1
 
+Log2(N);
+
 
