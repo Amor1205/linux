@@ -14,3 +14,9 @@ the meaning of spining
 Log2(N);
 
 
+AVL Tree is totally balanced . O(N) = log2(N)
+REd and black tree is approximately balanced . O(N) = 2Log2(N)
+
+But for CPU, N is very small. So their O(N) is very close.
+
+AVL is more balanced by rotation, which will cost much.
