@@ -90,6 +90,38 @@ struct __RBTreeIterator
 	{
 		return _node != s._node;
 	}
+		
+	bool operator==(const Self& s) const
+	{
+		return _node == s._node;
+	}
+
+	Self& operator--()
+	{
+		if(_node->_left)
+		{
+			Node* right = _node->_left;
+			while(right->_right)
+			{
+				right = right->_right;
+			}
+
+			_node = right;
+		}
+		else
+		{
+			Node* cur = _node;
+			Node* parent = cur->_parent;
+			while(parent && cur == parent->_left)
+			{
+				cur = parent;
+				parent = parent->_parent;
+			}
+
+			_node = parent;
+		}
+		return *this;
+	}
 };
 
 //set RBTree<K,K> 
@@ -100,6 +132,7 @@ struct RBTree
     typedef RBTreeNode<T> Node;
 public:
     typedef __RBTreeIterator<T,T&,T*> iterator;
+    typedef __RBTreeIterator<T,const T&,const T*> const_iterator;
 
     iterator begin()
     {
@@ -113,15 +146,78 @@ public:
     {
 	return iterator(nullptr);
     }
+
+    iterator Find(const K& key)
+    {
+	    Node* cur = _root;
+	    KeyOfT kot;
+	    while(cur)
+	    {
+		    if(kot(cur->_data) < key)
+			    cur = cur->_right;
+		    else if(kot(cur->_data > key))
+			    cur = cur->_left;
+		    else 
+			    return iterator(cur);
+	    }
+	    return end();
+    }
+
     RBTree()
         :_root(nullptr)
     {}
-    bool Insert(const T& data)
+    ~RBTree()
+    {
+	Destroy(root);
+	root = nullptr;
+    }
+    RBTree(const RBTree<K,V,KeyOfT>& t)
+    {
+	_root = Copy(t._root);
+    }
+    void Copy(Node* root)
+    {
+	    if(!root)
+	    {
+		return nullptr;
+	    }
+
+	    Node* newRoot = new Node(root->_data);
+	    newRoot->_col = root->_col;
+
+	    newRoot->left = Copy(root->_left);
+	    newRoot->right = Copy(root->_right);
+	    if(newRoot->_left)
+		    newRoot->_left->_parent = newRoot;
+	    if(newRoot->_right)
+		    newRoot->_right->_parent = newRoot;
+
+	    return newRoot;
+
+    }
+    void Destroy(Node* root)
+    {
+	if(!root)
+		return;
+
+	Destroy(root->_left);
+	Destroy(root->_right);
+
+	delete root;
+    }
+
+    RBTree<K, T, KeyOfT>& operator=(RBTree<K, T, KeyOfT> t)
+    {
+	    swap(_root,t._root);
+	    return *this;
+    }
+
+    pair<iterator,bool> Insert(const T& data)
     {
         if(!_root){
             _root = new Node(data);
             _root->_col = BLACK;
-            return true;
+            return make_pair(iterator(_root),true);
         }
 
 	KeyOfT kot;
@@ -137,11 +233,12 @@ public:
                 cur = cur->_left;
             }
             else{
-                return false;
+                return make_pair(iterator(cur),false);
             }
         }
         //cur is the position where we need to insert.
         cur = new Node(data);
+	Node* newnode = cur;
         if(kot(parent->_data) < kot(data)){
             parent->_right = cur;
             cur->_parent = parent;
@@ -227,7 +324,7 @@ public:
 
         _root->_col = BLACK;//universal handling
 
-        return true;
+        return make_pair(iterator(newnode),true);
     }
 
     void InOrder(){

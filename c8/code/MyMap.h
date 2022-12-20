@@ -26,11 +26,21 @@ namespace AMor
 			return _t.end();
 		}
 
+		V& operator[](const K& key)
+		{
+			auto ret = _t.Insert(make_pair(key,V()));
+			return ret.first->second;
+		}
 
-		bool insert(const pair<K,V>& kv)
+		pair<iterator,bool> insert(const pair<K,V>& kv)
 		{
 			return _t.Insert(kv);
 		}
+		iterator find(const K& key)
+		{
+			return _t.Find();
+		}
+
 	private:
 		RBTree<K,pair<K,V>,MapKeyOfT> _t;		
 	};
@@ -51,7 +61,10 @@ namespace AMor
 		dict.insert(make_pair("sort","paixu"));
 		dict.insert(make_pair("string","zifuchuan"));
 		dict.insert(make_pair("map","ditu"));
-
+		
+		dict["left"];
+		dict["right"];
+		dict["map"]="ditu\\yingshe";
 		auto it = dict.begin();
 		while(it != dict.end())
 		{

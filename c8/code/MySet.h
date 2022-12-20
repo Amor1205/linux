@@ -24,10 +24,15 @@ namespace AMor
 			return _t.end();
 		}
 
-		bool insert(const K& key)
+		pair<iterator,bool> insert(const K& key)
 		{
 			return _t.Insert(key);
 		}
+		iterator find(const K& key)
+		{
+			return _t.Find(key);
+		}
+
 	private:
 		RBTree<K,K,SetKeyOfT> _t;
 

@@ -14,10 +14,28 @@ namespace AMor
 				return kv.first;
 			}
 		};
-		bool insert(const pair<K,V>& kv)
+
+		typedef typename RBTree<K,pair<K,V>,MapKeyOfT>::iterator iterator;
+
+		iterator begin()
+		{
+			return _t.begin();
+		}
+		iterator end()
+		{
+			return _t.end();
+		}
+
+
+		pair<iterator,bool> insert(const pair<K,V>& kv)
 		{
 			return _t.Insert(kv);
 		}
+		iterator find(const K& key)
+		{
+			return _t.Find();
+		}
+
 	private:
 		RBTree<K,pair<K,V>,MapKeyOfT> _t;		
 	};
@@ -30,6 +48,22 @@ namespace AMor
 		m.insert(make_pair(9,7));
 		m.insert(make_pair(4,6));
 		m.insert(make_pair(16,16));
+	}
+	
+	void test_map2()
+	{
+		map<string,string> dict;
+		dict.insert(make_pair("sort","paixu"));
+		dict.insert(make_pair("string","zifuchuan"));
+		dict.insert(make_pair("map","ditu"));
+
+		auto it = dict.begin();
+		while(it != dict.end())
+		{
+			cout << it->first << ":" << it->second << endl;
+			++it;
+		}
+		
 	}
 }
 
