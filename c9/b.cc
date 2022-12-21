@@ -2,7 +2,7 @@
 
 int main()
 {
-	TestHashTable();
+	LinkHash::TestHashTable();
 	cout << " ";
 	return 0;
 }
