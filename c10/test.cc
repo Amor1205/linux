@@ -2,6 +2,8 @@
 
 int main()
 {
-    Amor::TestTwoBitSet();
+    //Amor::TestTwoBitSet();
+    
+    
     return 0;
 }
