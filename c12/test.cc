@@ -1,9 +1,5 @@
-#include<iostream>
-#include<string>
-#include<time.h>
-#include<vector>
+#include"singleton.h"
 
-using namespace std;
 class Exception
 {
 public:
@@ -86,10 +82,10 @@ void ServerStart()
 // }
 
 
-int main()
-{
-    vector<int> v(10,5);
-    // v.reserve(1000000000000);
-    v.at(10) = 0;
-    return 0;
-}
+// int main()
+// {
+//     vector<int> v(10,5);
+//     // v.reserve(1000000000000);
+//     v.at(10) = 0;
+//     return 0;
+// }
