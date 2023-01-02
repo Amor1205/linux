@@ -89,3 +89,12 @@ void ServerStart()
 //     v.at(10) = 0;
 //     return 0;
 // }
+
+int main()
+{
+    const int a = 2;
+    int* p = const_cast<int*>(&a);
+    *p = 3;
+    cout << a << endl;
+    cout << *p; 
+}
