@@ -90,11 +90,44 @@ void ServerStart()
 //     return 0;
 // }
 
+// int main()
+// {
+//     const int a = 2;
+//     int* p = const_cast<int*>(&a);
+//     *p = 3;
+//     cout << a << endl;
+//     cout << *p; 
+// }
+
+
+class A
+{
+public: 
+    virtual void func(){}
+};
+class B: public A
+{
+public:
+    int _b = 0;
+};
+
+void func(A* pa){
+        B* pb1 = dynamic_cast<B*>(pa);
+        if (pb1 == nullptr)
+        {
+            cout << "FATHER"<< endl;
+        }
+        else
+        {
+            cout << "DERIVED" << endl;
+        }
+}
+
 int main()
 {
-    const int a = 2;
-    int* p = const_cast<int*>(&a);
-    *p = 3;
-    cout << a << endl;
-    cout << *p; 
+    A aa;
+    B bb;
+    //func(&aa);
+    func(&bb);
+    return 0;
 }
