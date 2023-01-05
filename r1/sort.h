@@ -28,20 +28,29 @@ void direct_insert_sort(vector<int>& v)
 }
 void shell_sort(vector<int>& v)
 {
-    int gap = v.size()/2;
-    while(gap >= 1)
+    int gap = v.size();
+    while(gap > 1)
     {
-    for(int i = 0; i< v.size()-1; ++i)
-    {
-        if(gap + i > v.size()-1)
+        gap = gap / 3 + 1;
+        cout << "gap : " << gap << endl;
+        for(int i = 0; i < v.size()-gap; ++i)
         {
-            break;
-        }
-        if(v[i] > v[gap+i])
-        {
-            swap(v[i],v[gap+i]);
+            int end = i;
+            int tmp = v[end + gap];
+            while(end >= 0)
+            {
+                if(v[end] > tmp)
+                {
+                    v[end + gap] = v[end];
+                    end -= gap;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            v[end + gap] = tmp;
         }
     }
-    gap /= 2;
-    }
+
 }
