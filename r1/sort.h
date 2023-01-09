@@ -4,7 +4,7 @@
 #include<iostream>
 #include<algorithm>
 #include<queue>
-
+#include<functional>
 using namespace std;
 
 //direct insertion sort
@@ -74,12 +74,12 @@ void direct_selection_sort(vector<int>& v)
 
 void heap_sort(vector<int>& v)
 {
-    priority_queue<int> pq;
+    priority_queue<int,vector<int>, greater<int> > pq;
     for(auto e : v)
     {
         pq.push(e);
     }
-    for(int i = 0; i < v.size()-1; ++i)
+    for(int i = 0; i <= v.size()-1; ++i)
     {
         if(v[i] != pq.top())
         {
@@ -105,7 +105,7 @@ void adjust_down(int* a,int n, int parent)
         {
             ++min_child;
         }
-        if(a[min_child] > a[parent])
+        if(a[min_child] < a[parent])
         {
             Swap(&a[min_child], &a[parent]);
             parent = min_child;
@@ -134,3 +134,89 @@ void c_heap_sort(int* a, int n)
         ++i;
     }
 }
+
+void bubble_sort(int*a, int n)
+{
+    // 趟数，一趟可以选出来一个最大值，最小值
+    // n/2就可以选出来所有的。
+    // 记录走到哪了 j
+    // int times = 0;
+    // while(times < n - 1)
+    // {
+    //     for(int j = 0; j < n - 1; ++j)
+    //     {
+    //         if(a[j] > a[j+1])
+    //         {
+    //             Swap(&a[j], &a[j+1]);
+    //         }
+    //     }
+    //     ++times;
+    // }
+
+    for(int j = 0; j < n; ++j)
+    {
+        int if_swapped = 0;
+        for(int i = 0; i < n - j; ++i)
+        {
+            if(a[i - 1] > a[i])
+            {
+                Swap(&a[i-1], &a[i]);
+                if_swapped = 1;
+            }
+        }
+        if(if_swapped == 0)
+        {
+            break;
+        }
+    }
+}
+int partion(int*a,int left,int right)
+{
+    int mid_element = (right - left)/2 + left;
+    if(a[left] > a[mid_element])
+    {
+        if(a[mid_element] > a[right])
+        {
+            return mid_element;
+        }
+        else
+        {
+            if(a[left] > a[right])
+            {
+                return right;
+            }
+            else
+            {
+                return left;
+            }
+        }
+    }   
+    else // a[left] < a[mid_element]
+    {
+        if(a[left] > a[right])
+        {
+            return left;
+        }
+        else{
+            if(a[right] > a[mid_element])
+            {
+                return mid_element;
+            }
+            else
+            {
+                return right;
+            }
+        }
+    }
+}
+void quick_sort(int*a, int left, int right)
+{
+    if(right - left <= 1)
+    {
+        return;
+    }
+    int div = partion(a, left, right);
+    quick_sort(a,left,div);
+    quick_sort(a,div+1,right);
+
+}//wrong

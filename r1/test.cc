@@ -12,8 +12,10 @@ int main()
     //direct_insert_sort(v);
     //shell_sort(v);
     //direct_selection_sort(v);
-    //heap_sort(v);
-    c_heap_sort(a,8);//wrong
+    // heap_sort(v);
+    //c_heap_sort(a,8);
+    //bubble_sort(a,8);
+    quick_sort(a,0,7);
     // for(auto e : v)
     // {
     //     cout << e << " ";
