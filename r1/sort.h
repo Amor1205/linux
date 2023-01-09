@@ -170,7 +170,7 @@ void bubble_sort(int*a, int n)
         }
     }
 }
-int partion(int*a,int left,int right)
+int get_mid_index(int*a,int left,int right)
 {
     int mid_element = (right - left)/2 + left;
     if(a[left] > a[mid_element])
@@ -206,6 +206,20 @@ int partion(int*a,int left,int right)
             {
                 return right;
             }
+        }
+    }
+}
+int partion(int*a, int left, int right)
+{
+    int mid_i = get_mid_index(a,left,right);
+    int mid_num = a[mid_i];
+    int left_i = left;
+    int right_i = right;
+    while(left_i >= right_i)
+    {
+        if(a[left_i] > mid_num)//换到最右边
+        {
+            
         }
     }
 }
