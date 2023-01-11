@@ -5,6 +5,7 @@
 #include<algorithm>
 #include<queue>
 #include<functional>
+#include<stack>
 using namespace std;
 
 //direct insertion sort
@@ -91,6 +92,11 @@ void heap_sort(vector<int>& v)
 
 void Swap(int* p1, int* p2)
 {
+    if(p1 == p2)
+    {
+        return;
+    }
+
     int tmp = *p1;
     *p1 = *p2;
     *p2 = tmp;
@@ -172,65 +178,304 @@ void bubble_sort(int*a, int n)
 }
 int get_mid_index(int*a,int left,int right)
 {
-    int mid_element = (right - left)/2 + left;
-    if(a[left] > a[mid_element])
+    int mid = (right - left)/2 + left;
+    if(a[left] > a[mid])
     {
-        if(a[mid_element] > a[right])
+        if(a[mid] > a[right])
         {
-            return mid_element;
+            return mid;
         }
-        else
-        {
-            if(a[left] > a[right])
+        else if(a[left] > a[right])
             {
                 return right;
             }
-            else
+        else
             {
                 return left;
             }
-        }
     }   
-    else // a[left] < a[mid_element]
+    else // a[left] <= a[mid]
     {
         if(a[left] > a[right])
         {
             return left;
         }
-        else{
-            if(a[right] > a[mid_element])
-            {
-                return mid_element;
-            }
-            else
-            {
-                return right;
-            }
+        else if(a[right] > a[mid])
+        {
+                return mid;
+        }
+        else
+        {
+            return right;
         }
     }
 }
-int partion(int*a, int left, int right)
+int part_sort_hoare(int*a, int left, int right)
 {
     int mid_i = get_mid_index(a,left,right);
-    int mid_num = a[mid_i];
-    int left_i = left;
-    int right_i = right;
-    while(left_i >= right_i)
+    Swap(&a[left],&a[mid_i]);
+
+    int key_i = left;
+    while(left < right)
     {
-        if(a[left_i] > mid_num)//换到最右边
+        while(left < right && a[right] >= a[key_i])
         {
-            
+            --right;
+        }
+        while(left < right && a[left] <= a[key_i])
+        {
+            ++left;
+        }
+        if(left < right)
+        {
+            Swap(&a[left], &a[right]);
         }
     }
+    int meet_i = left;
+    Swap(&a[meet_i], &a[key_i]);
+    return meet_i;
+}
+
+int part_sort_hole(int*a, int left, int right)
+{
+    int mid = get_mid_index(a,left,right);
+    Swap(&a[left],&a[mid]);
+
+    int key = a[left];
+    int hole = left;
+    while(left < right)
+    {
+        while(left < right && a[right] >= key)
+        {
+            --right;
+        }
+        a[hole] = a[right];
+        hole = right;
+
+        while(left < right && a[left] <= key)
+        {
+            ++left;
+        }
+        a[hole] = a[left];
+        hole = left;
+    }
+
+    a[hole] = key;
+    return hole;
+}
+
+int part_sort_pointer(int*a ,int left, int right)
+{
+    int mid = get_mid_index(a,left,right);
+    Swap(&a[left],&a[mid]);
+    int key_i = left;
+    int prev = left;
+    int cur = left+1;
+
+    while(cur <= right)
+    {
+        if(a[cur] < a[key_i] && ++prev != cur)
+        {
+            Swap(&a[cur], &a[prev]);
+        }
+        ++cur;
+    }
+    Swap(&a[key_i], &a[prev]);
+    return prev;
 }
 void quick_sort(int*a, int left, int right)
 {
-    if(right - left <= 1)
+    if(left >= right)
     {
         return;
     }
-    int div = partion(a, left, right);
-    quick_sort(a,left,div);
+    int div = part_sort_pointer(a, left, right);
+    quick_sort(a,left,div-1);
     quick_sort(a,div+1,right);
 
-}//wrong
+}
+
+void quick_sort_nonR(int* a, int left, int right)
+{
+    stack<int> st;
+    st.push(left);
+    st.push(right);
+    while(!st.empty())
+    {
+        int end = st.top();
+        st.pop();
+        int begin = st.top();
+        st.pop();
+
+        int key_i = part_sort_pointer(a,begin,end);
+
+        if(key_i + 1 > right)
+        {
+            st.push(key_i+1);
+            st.push(right);
+        }
+        if(left < key_i - 1)
+        {
+            st.push(left);
+            st.push(key_i - 1);
+        }
+    }
+}
+
+void _merge_sort(int* a, int begin, int end, int* tmp)
+{
+    if(begin >= end)
+    {
+        return;
+    }
+    int mid = begin + (end - begin) / 2;
+    _merge_sort(a, begin, mid, tmp);
+    _merge_sort(a, mid + 1, end, tmp);
+
+    int begin1 = begin, end1 = mid;
+    int begin2 = mid + 1, end2 = end;
+    int i = begin;
+    while(begin1 <= end1 && begin2 <= end2)
+    {
+        if(a[begin1] <= a[begin2])
+        {
+            tmp[i++] = a[begin1++];
+        }
+        else
+        {
+            tmp[i++] = a[begin2++];
+        }
+    }
+
+    while(begin1 <= end1)
+    {
+        tmp[i++] = a[begin1++];
+    }
+    while(begin2 <= end2)
+    {
+        tmp[i++] = a[begin2++];
+    }
+
+    memcpy(a + begin, tmp+begin, (end - begin + 1) * sizeof(int));
+
+}
+void merge_sort(int* a, int n)
+{
+    int* tmp = (int*) malloc(sizeof(int) * n);
+    if(tmp == nullptr)
+    {
+        perror("malloc failed");
+        return;
+    }
+    _merge_sort(a, 0, n-1, tmp);
+    free(tmp);
+    tmp = nullptr;
+}
+
+void merge_sort_nonR(int*a ,int n)
+{
+    int* tmp = (int*) malloc(sizeof(int) * n);
+    if(tmp == nullptr)
+    {
+        perror("malloc failed");
+        return;
+    }
+    //_merge_sort(a, 0, n-1, tmp);
+    int gap = 1;
+    while(gap < n)
+    {
+        for(int j = 0; j < n; j += 2*gap)
+        {
+            int begin1 = j, end1 = j + gap - 1;
+            int begin2 = j + gap, end2 = j + 2*gap - 1;
+            if(end1 >= n || begin2 >= n)
+            {
+                cout << "end1 >= n || begin2 >= n : WRONG RANGE";
+                break;
+            }
+            if(end2 >= n)
+            {
+                cout << "end2 >= n : HAVE FIXED IT";
+                end2 = n-1;
+            }
+            int i = j;
+            while(begin1 <= end1 && begin2 <= end2)
+            {
+                if(a[begin1] <= a[begin2])
+                {
+                    tmp[i++] = a[begin1++];
+                }
+                else
+                {
+                    tmp[i++] = a[begin2++];
+                }
+            }
+            while(begin1 <= end1)
+            {
+                tmp[i++] = a[begin1++];
+            }
+            while(begin2 <= end2)
+            {
+                tmp[i++] = a[begin2++];
+            }
+            memcpy(a+j, tmp+j, (end2 - j + 1) * sizeof(int));
+        }
+        gap *= 2;
+    }
+    free(tmp);
+    tmp = nullptr;    
+}
+
+int* count_sort(int* a, int n)
+{
+    int max = a[0];
+    int min = a[0];
+    for(int i = 0; i < n; ++i)
+    {
+        if(max < a[i])
+        {
+            max = a[i];
+        }
+        if(min > a[i])
+        {
+            min = a[i];
+        }
+    }
+    int range = max - min + 1;
+    int* tmp = (int*) malloc(sizeof(int) * range);
+    //check and memset
+
+    memset(tmp, 0, sizeof(int) * range);
+
+    for(int i = 0; i < n; ++i)
+    {
+        tmp[a[i] - min]++;
+    }
+    // for(int i = 0; i < range - 1; ++i)
+    // {
+    //     tmp[i+1] += tmp[i];
+    // }
+
+    // int* new_array = (int*) malloc(sizeof(int) * n);
+    // for(int i = n - 1; i >= 0; i--)
+    // {
+    //     new_array[tmp[a[i] - min] - 1] = a[i];
+    //     -- tmp[a[i] - min];
+    // }   
+    
+    
+    // free (tmp);
+    // tmp = nullptr;
+    // return new_array;
+
+    int j = 0;
+    for(int i = 0; i < range; ++i)
+    {
+        while(tmp[i]--)
+        {
+            a[j] = i + min;
+            ++j;
+        }
+    }
+    return a;
+}
