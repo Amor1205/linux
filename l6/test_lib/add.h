@@ -1,3 +1,3 @@
 #pragma once
-#include"add.cc"
+#include<stdio.h>
 extern int myAdd(int x, int y );
