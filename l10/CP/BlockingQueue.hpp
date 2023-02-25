@@ -35,7 +35,7 @@ namespace ns_blockingQueue{
         {
             Lock();
             // below : critical Zone
-            if(IsFull())
+            while(IsFull())
             {
                 // when waiting, it has the lock.
                 ProducerWait();
@@ -52,7 +52,7 @@ namespace ns_blockingQueue{
         void Pop(T* out)
         {
             Lock();
-            if(IsEmpty())
+            while(IsEmpty())
             {
                 ConsumerWait();
             }
