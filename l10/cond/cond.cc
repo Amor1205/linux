@@ -14,7 +14,7 @@ void* ctrl(void* args)
     string name = (char*) args;
     while(1)
     {
-        pthread_cond_signal(&cond);
+        pthread_cond_broadcast(&cond);
         sleep(1);
     }
 
