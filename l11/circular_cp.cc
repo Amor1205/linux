@@ -7,7 +7,7 @@ void* consumer(void* args)
     {
         int data = 0;
         rq->Pop(&data);
-        std::cout << "The data consumed is : " << data << std::endl;
+        std::cout << "The data consumed by the ["<< pthread_self()<<"]is : " << data << std::endl;
         //consume pop
     }
 }
@@ -27,11 +27,19 @@ int main()
 {
     srand((unsigned int)time(nullptr));
     CircularQueue<int>* rq = new CircularQueue<int>();
-    pthread_t c,p;
+    pthread_t c,p,c1,c2,c3,c4;
     pthread_create(&c, nullptr, consumer, (void*)rq);
+    pthread_create(&c1, nullptr, consumer, (void*)rq);
+    pthread_create(&c2, nullptr, consumer, (void*)rq);
+    pthread_create(&c3, nullptr, consumer, (void*)rq);
+    pthread_create(&c4, nullptr, consumer, (void*)rq);
     pthread_create(&p, nullptr, producer, (void*)rq);
 
     pthread_join(c, nullptr);
+    pthread_join(c1, nullptr);
+    pthread_join(c2, nullptr);
+    pthread_join(c3, nullptr);
+    pthread_join(c4, nullptr);
     pthread_join(p, nullptr);
 
     return 0;
