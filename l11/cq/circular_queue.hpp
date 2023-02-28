@@ -4,6 +4,9 @@
 #include<semaphore.h>
 #include<time.h>
 #include<unistd.h>
+#include<string>
+#include"task.hpp"
+using namespace ns_task;
 namespace ns_circular_queue{
     const int g_default_cap = 10;
 

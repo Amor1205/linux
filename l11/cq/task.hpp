@@ -24,6 +24,14 @@ namespace ns_task
         {
 
         }
+        std::string Show() const 
+        {
+            std::string message = std::to_string(_x);
+            message += _op;
+            message += std::to_string(_y);
+            message += "= ";
+            return message;
+        }
         int Run()
         {
             int res = 0;
