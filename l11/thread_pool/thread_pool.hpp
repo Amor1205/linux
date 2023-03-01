@@ -1,11 +1,14 @@
 #pragma once
 
+#include<time.h>
+#include<cstdlib>
+#include<ctime>
 #include<iostream>
 #include<string>
 #include<queue>
 #include<unistd.h>
 #include<pthread.h>
-
+#include"task.hpp"
 namespace ns_threadpool{
     const int g_num = 5;
     template<class T>
@@ -15,14 +18,29 @@ namespace ns_threadpool{
         std::queue<T> _task_queue; 
         pthread_mutex_t _mtx; // protect the queue 
         pthread_cond_t _cond; // let the threads wait when queue is empty
+        static ThreadPool<T>* _inst;
+
     public:
+        static ThreadPool<T>* GetInstance(){
+            static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER
+            if(_inst == nullptr)
+            {
+                pthread_mutex_lock(&lock);
+                if(_inst == nullptr){
+                    _inst = new ThreadPool<T>();
+                    _inst->InitThreadPool();
+                }
+                pthread_mutex_unlock(&lock);
+            }
+            return _inst;
+        }
         void Lock()
         {
-            phread_mutex_lock(&_mtx);
+            pthread_mutex_lock(&_mtx);
         }
         void Unlock()
         {
-            phread_mutex_unlock(&_mtx);
+            pthread_mutex_unlock(&_mtx);
         }
         bool IsEmpty()
         {
@@ -37,10 +55,7 @@ namespace ns_threadpool{
             pthread_cond_signal(&_cond);
         }
     public:
-        ThreadPool(int num = g_num) :_num(num){
-            pthread_mutex_init(&_mtx, nullptr);
-            pthread_cond_init(&_cond, nullptr);
-        }
+
         ~ThreadPool(){
             pthread_mutex_destroy(&_mtx);
             pthread_cond_destroy(&_cond);
@@ -87,10 +102,17 @@ namespace ns_threadpool{
         }  
 
     private:
-        PopTask(T* out){
+        void PopTask(T* out){
             *out = _task_queue.front();
             _task_queue.pop();
         }
+        ThreadPool(int num = g_num) :_num(num){
+            pthread_mutex_init(&_mtx, nullptr);
+            pthread_cond_init(&_cond, nullptr);
+        }
+        ThreadPool(const ThreadPool<T>& tp) = delete;
+        ThreadPool<T> operator()(ThreadPool<T>& tp) = delete;
     };
-
+    template<class T>
+    ThreadPool<T>* ThreadPool<T>::_inst = nullptr;
 };
