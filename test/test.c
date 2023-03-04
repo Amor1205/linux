@@ -256,20 +256,84 @@
 //   return p - s;
 // }
 // char* myStrcpy(char* dest, const char* source)
-char* myStrcpy(char* dest, char* source)
-{
-	char* ret = dest;
-	assert(dest);
-	assert(source);
-	while((*dest++ = *source++));
-	return ret;
-}
+// char* myStrcpy(char* dest, char* source)
+// {
+// 	char* ret = dest;
+// 	assert(dest);
+// 	assert(source);
+// 	while((*dest++ = *source++));
+// 	return ret;
+// }
+// char* myStrcat(char* dest, const char* source){
+// 	char* ret = dest;
+//   while(*dest != '\0')
+//   {
+//     dest++;
+//   }
+//   while((*dest++ = *source++ ));
+// 	return ret;
+// }
+
+// int myStrcmp(const char* str1, const char* str2)
+// {
+// 	assert(str1 && str2);
+// 	// while(*str1++ == *str2++ && *str1 != '\0');
+// 	while(*str1 == *str2 && *str1 != '\0'){
+// 		str1++;
+// 		str2++;
+// 	}
+// 	if(*str1 == *str2 && *str1 == '\0'){
+// 		return 0;
+// 	}
+// 	return (int)(*str1 - *str2);
+// }
+
+// char* myStrncpy(char* dest, const char* source, size_t num,char ch)
+// {
+// 	char* ret = dest;
+// 	int count = 0;
+// 	while(count < num && *source != '\0')
+// 	{
+// 		*dest = *source;
+// 		dest++ && source++;
+// 		count ++;
+// 	}
+// 	if(*source == '\0' && count < num){
+//     *dest = '\0';
+//     count++;
+// 		while(count < num)
+// 		{
+// 			*dest = ch;
+// 			*dest++;
+// 			count++;
+// 		}
+// 	}
+// 	return ret;
+// }
+
+// int main()
+// {
+// 	const char* c1 = "abcdef";
+// 	const char* c2 = "abcdeg";
+// 	char* c3[30] = {};
+// 	// printf("%d\n",myStrcmp(c1,c2));
+// 	// printf("%d\n",strcmp(c1,c2));
+// 	printf("%s\n",myStrncpy(c3,c1,30,'x'));
+
+// 	return 0;
+// }
+
+
 int main()
 {
-	const char* src = "hello world";
-	char* dest[25];
-	myStrcpy(dest, src);
-	printf("%s", dest);
-
+	char str[] = "Please! Give age to civilization, not civilization to age.";
+	char* p;
+	printf("%s\n", str);
+	p = strtok(str, ",.!");
+	while(p != NULL)
+	{
+		printf("%s\n",p);
+		p = strtok(NULL,",.!");
+	}
 	return 0;
 }
