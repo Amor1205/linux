@@ -324,16 +324,64 @@
 // }
 
 
+// int main()
+// {
+// 	char str[] = "Please! Give age to civilization, not civilization to age.";
+// 	char* p;
+// 	printf("%s\n", str);
+// 	p = strtok(str, ",.!");
+// 	while(p != NULL)
+// 	{
+// 		printf("%s\n",p);
+// 		p = strtok(NULL,",.!");
+// 	}
+// 	return 0;
+// }
+
+
+// struct s1{
+// 	char c1;
+// 	// char c2;
+// 	int i;
+// };
+// struct s2{
+// 	char c1;
+// 	int i ;
+// 	char c2;
+// };
+// struct A
+// {
+// 	int a : 2;
+// 	int b : 5;
+// 	int c : 7;
+// 	int d : 3;
+// };
+// int main()
+// {
+// 	struct A a;
+// 	printf("%d",sizeof(a));
+// }
+
+// union Un{
+// 	int i;
+// 	char c;
+// };
+
+// int main()
+// {
+// 	union Un un;
+// 	printf("%d",sizeof(un));
+// 	printf("%p, %p",&(un.i),&(un.c));
+// 	return 0;
+// }
+union Un1 {
+char c[5];
+int i; };
+union Un2 {
+short c[7];
+int i; };
+//下面输出的结果是什么?
 int main()
 {
-	char str[] = "Please! Give age to civilization, not civilization to age.";
-	char* p;
-	printf("%s\n", str);
-	p = strtok(str, ",.!");
-	while(p != NULL)
-	{
-		printf("%s\n",p);
-		p = strtok(NULL,",.!");
-	}
-	return 0;
+	printf("%d\n", sizeof(union Un1)); printf("%d\n", sizeof(union Un2));
 }
