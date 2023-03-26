@@ -42,8 +42,11 @@ int main(int argc, char* argv[]){
         struct sockaddr_in tmp;
         socklen_t len = sizeof(tmp);
         char buffer[1024];
-        recvfrom(sock, buffer,sizeof(buffer)-1, 0, (struct sockaddr*)&tmp, &len);
-        std::cout << "server echo# " <<buffer << std::endl;
+        ssize_t cnt = recvfrom(sock, buffer,sizeof(buffer)-1, 0, (struct sockaddr*)&tmp, &len);
+        if(cnt > 0){
+            buffer[cnt] = 0;
+            std::cout << "server echo# " <<buffer << std::endl;
+        }
     }
     return 0;
 }

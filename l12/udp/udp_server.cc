@@ -18,7 +18,7 @@ int main(){
     local.sin_port  = htons(port);
     local.sin_addr.s_addr = INADDR_ANY;
     if(bind(sock, (struct sockaddr*)&local, sizeof(local)) < 0){
-        std::cerr << "bind error : " << errno << std::endl;
+        std::cerr << "bind2 error : " << errno << std::endl;
         return 2;
     }
     //提供服务
@@ -28,10 +28,12 @@ int main(){
     while(!quit){
         struct sockaddr_in peer;
         socklen_t len = sizeof(peer);
-        recvfrom(sock, buffer, sizeof(buffer)-1, 0, (struct sockaddr*)&peer,&len);
-        std::cout << "client# "<< buffer << std::endl;
-        std::string echo = "hello";
-        sendto(sock, echo.c_str(), echo.size(), 0, (struct sockaddr*)&peer, len );
+        ssize_t cnt = recvfrom(sock, buffer, sizeof(buffer)-1, 0, (struct sockaddr*)&peer,&len);
+        if(cnt > 0){
+            std::cout << "client# "<< buffer << std::endl;
+            std::string echo = "hello";
+            sendto(sock, echo.c_str(), echo.size(), 0, (struct sockaddr*)&peer, len );      
+        }
     }
     return 0;
 }
