@@ -10,9 +10,10 @@
 #include<string.h>
 #include<stdlib.h>
 #include<stdio.h>
+#include "thread_pool.hpp"
 
 void Usage(std::string proc){
-    std::cout << "Usage : " << proc << "server_ip server_port" << std::endl;
+    std::cout << "Usage : " << proc << " server_ip server_port" << std::endl;
 }
 // ./udp_client server_ip server_port
 int main(int argc, char* argv[]){
