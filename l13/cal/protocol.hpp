@@ -21,7 +21,6 @@ typedef struct response{
 
 //request_t -> string
 std::string SerializeRequest(const request_t& req){
-    request_t req = {10, 20, '*'};
     Json::Value root; //可以承装任何对象，json 是kv式序列化方案。
     root["datax"] = req.x;
     root["datay"] = req.y;
@@ -30,6 +29,7 @@ std::string SerializeRequest(const request_t& req){
     //Writer 有两种，FastWriter, StyledWriter
     Json::FastWriter writer;
     std::string json_string = writer.write(root);
+    return json_string;
 }
 //string -> request_t 
 void DeserializeRequest(const std::string& json_string, request_t& out){
@@ -38,7 +38,7 @@ void DeserializeRequest(const std::string& json_string, request_t& out){
     reader.parse(json_string, root);
     out.x = root["datax"].asInt();
     out.y = root["datay"].asInt();
-    out.x = (char)root["operator"].asInt();
+    out.op = (char)root["operator"].asInt();
 }
 std::string SerializeResponse(const response_t& resp){
     Json::Value root;
@@ -49,10 +49,10 @@ std::string SerializeResponse(const response_t& resp){
     std::string res = writer.write(root);
     return res;
 }
-void DeserializeResponse(const std::string& json_string, response_t& out){{
+void DeserializeResponse(const std::string& json_string, response_t& out){
     Json::Value root;
     Json::Reader reader;
     reader.parse(json_string, root);
     out.code = root["code"].asInt();
-    out.code = root["result"].asInt();
+    out.result = root["result"].asInt();
 }
