@@ -26,7 +26,7 @@ class Sock{
             local.sin_family = AF_INET;
             local.sin_port = htons(port);
             local.sin_addr.s_addr = INADDR_ANY;
-            if(bind(sock, (struct sockaddr*)&local, sizeof(local)) == 0){
+            if(bind(sock, (struct sockaddr*)&local, sizeof(local)) != 0){
                 cerr << "binding error " << endl;
                 exit(3);
             }else{
@@ -49,6 +49,19 @@ class Sock{
             }else{
                 cout << "Accepting failed" << endl;
                 return -1;
+            }
+        }
+        static void Connect(int sock, std::string ip,uint16_t port){
+            struct sockaddr_in server;
+            memset(&server, 0 ,sizeof(server));
+            server.sin_family = AF_INET;
+            server.sin_port = htons(port);
+            server.sin_addr.s_addr = inet_addr(ip.c_str());
+            if(connect(sock, (struct sockaddr*)&server, sizeof(server)) == 0){
+                cout << "Connection is successful" << endl;
+            }else{
+                cout << "Connection failed" << endl;
+                exit(5);    
             }
         }
     private:
