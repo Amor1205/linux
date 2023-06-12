@@ -1,7 +1,0 @@
-hello stdout
-hello printf
-hello fprintf
-hello fputs
-hello printf
-hello fprintf
-hello fputs
