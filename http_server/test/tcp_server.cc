@@ -1,7 +1,11 @@
 #include "../source/server.hpp"
+#include <cstdlib>
+// #include "../source/baseSource.hpp"
+//写入->HandleRead->向Send 先压入任务池中
+
 
 void HandleClose(Channel* channel){
-    std::cout << "close : " << channel->Fd() << std::endl;
+    DBG_LOG("Close: %d", channel->Fd());
     channel->Remove(); //移除监控
     delete channel;
 }
@@ -12,8 +16,8 @@ void HandleRead(Channel* channel){
     if(ret <= 0){
         HandleClose(channel); //关闭释放
     }
+    DBG_LOG("%s", buf);
     channel->EnableWrite(); //启动可写事件
-    std::cout << buf << std::endl;
 }
 void HandleWrite(Channel* channel){
     int fd = channel->Fd();
@@ -28,36 +32,44 @@ void HandleWrite(Channel* channel){
 void HandleError(Channel* channel){
     HandleClose(channel);
 }
-void HandleEvent(Channel* channel){
-    std::cout << "There is a new event;" << std::endl;
+void HandleEvent(EventLoop* loop, Channel* channel, uint64_t id){
+    loop->TimerRefresh(id);
 }
-void Acceptor(Poller* poller, Channel* lst_channel){
+void Acceptor(EventLoop* loop, Channel* lst_channel){
     int fd = lst_channel->Fd();
     int newfd = accept(fd, nullptr, nullptr);
     if(newfd < 0) return ;
-    Channel* channel = new Channel(poller, newfd);
+
+    uint64_t timerid = rand() % 10000;
+    Channel* channel = new Channel(loop, newfd);
     //为通信套接字设置可读事件回调函数
     channel->SetReadCallBack(std::bind(HandleRead, channel)); 
     channel->SetWriteCallBack(std::bind(HandleWrite, channel));
     channel->SetCloseCallBack(std::bind(HandleClose, channel));
     channel->SetErrorCallBack(std::bind(HandleError, channel));
-    channel->SetEventCallBack(std::bind(HandleEvent, channel));
+    channel->SetEventCallBack(std::bind(HandleEvent, loop, channel, timerid));
     channel->EnableRead();
+    
+    //非活跃连接的超时释放操作,10s后关闭连接
+    /*注意定时销毁任务必须在启动读事件之前，因为有可能启动了事件监控后，立刻就有了事件，但是这时候还没有任务*/
+    loop->TimerAdd(timerid, 10, std::bind(HandleClose, channel));
 }
 int main(){
-    Poller poller;
+    srand(time(nullptr));
+    EventLoop loop;
     Socket lst_sock;
     lst_sock.CreateServer(8080);
     //为监听套接字创建一个channel进行事件的管理，以及事件的处理
-    Channel channel(&poller, lst_sock.Fd());
-    channel.SetReadCallBack(std::bind(Acceptor, &poller, &channel));//回调中，获取新连接，为新连接创建channel并添加监控
+    Channel channel(&loop, lst_sock.Fd());
+    channel.SetReadCallBack(std::bind(Acceptor, &loop, &channel));//回调中，获取新连接，为新连接创建channel并添加监控
     channel.EnableRead(); //启动可读事件监控
     while(1){
-        std::vector<Channel*> actives;
-        poller.Poll(&actives);
-        for(auto &a : actives){
-            a->HandleEvent();
-        }
+        loop.Start();
+        // std::vector<Channel*> actives;
+        // poller.Poll(&actives);
+        // for(auto &a : actives){
+        //     a->HandleEvent();
+        // }
     }
 
     // while(1){
