@@ -2,22 +2,25 @@
 #include <vector>
 #include <string>
 #include <cstring>
+#include <typeinfo>
 #include <cassert>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <ctime>    
-#include <unistd.h>
-#include <fcntl.h>
-#include <functional>
-#include <sys/epoll.h>
-#include <sys/eventfd.h>
-#include <sys/timerfd.h>
 #include <unordered_map>
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <ctime>    
+#include <functional>
+
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/epoll.h>
+#include <sys/eventfd.h>
+#include <sys/timerfd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #define INF 0
 #define DBG 1
 #define ERR 2
@@ -137,7 +140,7 @@ public:
         MoveReadOffset(len);
         return str;
     }
-    void WriteAndPush(void* data, uint64_t len){
+    void WriteAndPush(const void* data, uint64_t len){
         Write(data, len);
         MoveWriteOffset(len);
     }
@@ -254,7 +257,7 @@ public:
         }
         return ret;//实际接收到的数据长度
     }
-    //
+
     ssize_t Send(const void* buf, size_t len, int flag = 0){
         //ssize_t send (int sockfd, void* data, size_t len, int flag);
         ssize_t ret = send(_sockfd, buf, len ,flag);
@@ -729,12 +732,77 @@ void TimerWheel::TimerCancel(uint64_t id){
     _loop->RunInLoop(std::bind(&TimerWheel::TimerCancelInLoop, this, id));
 }
 
+
+class Any{
+private:
+    class holder{
+    public:
+        virtual ~holder(){}
+        virtual const std::type_info& type() = 0;
+        virtual holder* clone() = 0;
+    };
+    template<class T>
+    class placeholder : public holder{
+    public:
+        placeholder(const T& val) :_val(val){}
+
+        //获取子类对象保存的数据类型
+        virtual const std::type_info& type() {return typeid(T);} 
+
+        //针对当前的对象自身，克隆出一个新的子类对象
+        virtual holder* clone() {return new placeholder(_val);}
+    public:
+        T _val;
+    };
+
+    holder* _content;
+public:
+    Any() :_content(nullptr){}
+    //任意类型的构造
+    template<class T>
+    Any(const T& val) :_content(new placeholder<T>(val)) {}
+
+    Any(const Any& other) 
+    :_content(other._content ? other._content->clone() : nullptr){}
+
+    ~Any() {delete _content;}
+    Any& swap(Any& other){
+        std::swap(_content, other._content);
+        return *this;
+    }
+    //获取/返回 子类对象所保存的数据的指针
+    template<class T>
+    T* get() {
+        //想要获取的数据类型必须要和保存的数据类型一致
+        assert(typeid(T) == _content->type());
+        // if(typeid(T) != _content->type()) return nullptr;
+
+        //content是父类指针，我们需要强转成子类指针才可以访问_val
+        return &((placeholder<T>*)_content)->_val;
+    }
+
+    //重载等号运算符
+    template<class T>
+    Any& operator=(const T& val){
+        //为val 构造一个临时的通用容器，然后与当前容器自身进行一个指针的交换。
+        //临时对象释放的时候，原先保存的数据也就被释放了。
+        Any(val).swap(*this);
+        return *this;
+    }
+    //可能赋值一个其他的通用容器
+    Any& operator=(const Any& other){
+        Any(other).swap(*this);
+        return *this;
+    }
+};
+
+class Connection;
 //DISCONNECTED -- 连接关闭, CONNECTING 连接建立成功，待处理
 //CONNECTED -- 连接建立完成，各种设置已经完成，可以通信, DISCONNECTING -- 待关闭状态
 typedef enum{ DISCONNECTED, CONNECTING, CONNECTED, DISCONNECTING}ConnStatu;
 //对外使用智能指针
 using PtrConnection = std::shared_ptr<Connection>;
-class Connection: public enable_shared_from_this<Connection> {
+class Connection: public std::enable_shared_from_this<Connection> {
 private:
     uint64_t _conn_id; //连接的唯一id，便于连接的管理和查找
 
@@ -757,7 +825,7 @@ private:
     using MessageCallBack = std::function<void(const PtrConnection&, Buffer*)>;
     using ClosedCallBack = std::function<void(const PtrConnection&)>;
     using AnyEventCallBack = std::function<void(const PtrConnection&)>;
-    ConnectionCallBack _connected_callback;
+    ConnectedCallBack _connected_callback;
     MessageCallBack _message_callback;
     ClosedCallBack _closed_callback;
     AnyEventCallBack _event_callback;
@@ -772,7 +840,6 @@ private:
     void HandleRead(){
         //1.接收socket 的数据，放到缓冲区 2.调用messagecallback 进行业务处理
         //1.
-        if (len == 0) return;
         char buf[65536];
         //调用非阻塞Recv，没有接收到返回0，否则>0
         int ret = _socket.NonBlockRecv(buf, sizeof(buf));
@@ -867,14 +934,14 @@ private:
         }
     }
     /*接口并不是世纪的发送接口，而只是吧数据放到了发送缓冲区，启动了可写事件监控*/
-    void SendInLoop(char* data, size_t len){
+    void SendInLoop(Buffer buf){
         //如果已经关闭了就直接return
         if (_statu == DISCONNECTED) return;
         //数据放到缓冲区
-        _out_buffer.WriteAndPush(data, len);
-        if (_channel->WriteAble() == false){
+        _out_buffer.WriteBufferAndPush(buf);
+        if (_channel.WriteAble() == false){
             //启动写事件监控
-            _channel->EnableWrite();
+            _channel.EnableWrite();
         }
     }
     //关闭并非实际的连接释放操作，需要判断还有没有数据待处理，待发送
@@ -889,8 +956,8 @@ private:
         }
         // 要么就是写入数据的时候出错导致关闭，要么就是没有待发送数据直接关闭
         if (_out_buffer.ReadAbleSize() > 0){
-            if (_channel->WriteAble() == false){
-                _channel->EnableWrite();
+            if (_channel.WriteAble() == false){
+                _channel.EnableWrite();
             }
         }
         if (_out_buffer.ReadAbleSize() == 0){
@@ -908,14 +975,17 @@ private:
         //3. 如果不存在，就新增
         _loop->TimerAdd(_conn_id, sec, std::bind(&Connection::ReleaseInLoop, this));
     }
-    void CancelInactiveReleaseInLoop(int sec){
+    void CancelInactiveReleaseInLoop(){
         _enable_inactive_release = false;
         if (_loop->HasTimer(_conn_id) == true) {
             _loop->TimerCancel(_conn_id);
         }
     }
+    void AssertInLoop(){
+        assert(_loop->IsInLoop() == true);
+    }
     void UpgradeInLoop(const Any& context, 
-                       const ConnectionedCallBack& conncb, 
+                       const ConnectedCallBack& conncb, 
                        const MessageCallBack& msgcb, 
                        const ClosedCallBack& closecb, 
                        const AnyEventCallBack& anycb){
@@ -928,39 +998,94 @@ private:
     }
 //暴露接口
 public:
-    Connection(EventLoop* loop, uint64_t conn_id, int socket);
-    ~Connection(){}
+    Connection(EventLoop* loop, uint64_t conn_id, int sockfd) :_conn_id(conn_id),_sockfd(sockfd), _enable_inactive_release(false),_loop(loop),_statu(CONNECTING),_socket(sockfd),_channel(loop, _sockfd){
+        //在channel中设置构造函数
+        /*启动读事件监控，不能放在构造函数中。*/
+        /*一旦启动读事件监控就可能会立即触发读事件，如果这时候启动了非活跃连接销毁*/
+        /*刷新活跃度，延迟销毁任务的执行*/
+        _channel.SetCloseCallBack(std::bind(&Connection::HandleClose, this));
+        _channel.SetEventCallBack(std::bind(&Connection::HandleEvent, this));
+        _channel.SetReadCallBack(std::bind(&Connection::HandleRead, this));
+        _channel.SetWriteCallBack(std::bind(&Connection::HandleWrite, this));
+        _channel.SetErrorCallBack(std::bind(&Connection::HandleError, this));
+    }
+    ~Connection(){
+        DBG_LOG("RELEASE CONNCECTION: %p", this);
+    }
     //获取管理的连接描述符
-    int Fd();
+    int Fd(){
+        return _sockfd;
+    }
     //获取Id
-    int Id();
+    int Id(){
+        return _conn_id;
+    }
     //返回状态
-    ConnStatu Statu();
+    ConnStatu Statu(){
+        return _statu;
+    }
     //是否是连接建立状态
-    bool IsConnected();
+    bool IsConnected(){
+        return (_statu == CONNECTED);
+    }
     //设置上下文 -- 连接建立完成时，需要设置上下文和回调函数
-    void SetContext(const Any& context);
+    void SetContext(const Any& context){
+        _context = context;
+    }
     //获取上下文，返回的是指针，因为可能需要修改，需要每次访问到同一块地址。
-    Any* GetContext();
+    Any* GetContext(){
+        return &_context;
+    }
     //设置回调函数
-    void SetConnectionCallBack(const ConnectionCallBack& cb);
-    void SetMessageCallBack(const MessageCallBack& cb);
-    void SetClosedCallBack(const ClosedCallBack& cb);
-    void SetAnyEventCallBack(const EventCallBack& cb);
+    void SetConnectedCallBack(const ConnectedCallBack& cb){
+        _connected_callback = cb;
+    }
+    void SetMessageCallBack(const MessageCallBack& cb){
+        _message_callback = cb;
+    }
+    void SetClosedCallBack(const ClosedCallBack& cb){
+        _closed_callback = cb;
+    }
+    void SetAnyEventCallBack(const AnyEventCallBack& cb){
+        _event_callback = cb;
+    }
+    void SetServerClosedCallBack(const ClosedCallBack& cb){
+        _server_closed_callback = cb;
+    }
     //连接建立就绪之后，进行channel 回调设置，启动读监控，调用_connected_callback;
-    void Established();
+    void Established(){
+        _loop->RunInLoop(std::bind(&Connection::EstablishedInLoop, this));
+    }
     //发送数据，将数据放到发送缓冲区，启动写事件监控
-    void Send(char* data, size_t len); 
+    void Send(const char* data, size_t len) {
+        //外界传入的data，可能是个临时空间，我们现在只是把发送操作压入了任务池
+        //有可能没有被立即执行，因此有可能执行的时候空间已经被释放掉了
+        //创建新的临时对象buffer
+        Buffer buf;
+        buf.WriteAndPush(data, len);
+        //将buffer传入SendInLoop
+        _loop->RunInLoop(std::bind(&Connection::SendInLoop, this, buf));
+    }
     //提供给组件使用者的关闭接口，不会直接关闭，先处理完业务
-    void ShutDown();
+    void ShutDown(){
+        _loop->RunInLoop(std::bind(&Connection::ShutDownInLoop,this));
+    }
     //启动非活跃销毁，并定义多长时间无通信就是非活跃，添加定时任务
-    void EnableInactiveRelease(int sec);
+    void EnableInactiveRelease(int sec){
+        _loop->RunInLoop(std::bind(&Connection::EnableInactiveReleaseInLoop,this, sec));
+    }
     //取消非活跃销毁
-    void CancelInactiveRelease(int sec);
-    //切换协议 -- 重置上下文以及阶段性处理函数
+    void CancelInactiveRelease(int sec){
+        _loop->RunInLoop(std::bind(&Connection::CancelInactiveReleaseInLoop,this));
+    }
+    //切换协议 -- 重置上下文以及阶段性回调处理函数 --- 非线程安全，所以必须在同一线程调用
     void Upgrade(const Any& context, 
-                 const ConnectionedCallBack& conncb, 
+                 const ConnectedCallBack& conncb, 
                  const MessageCallBack& msgcb, 
                  const ClosedCallBack& closecb, 
-                 const AnyEventCallBack& anycb);
+                 const AnyEventCallBack& anycb){
+        /*这个接口必须在EventLoop*/
+        AssertInLoop();
+        _loop->RunInLoop(std::bind(&Connection::UpgradeInLoop, this, context, conncb, msgcb, closecb, anycb));
+    }
 };

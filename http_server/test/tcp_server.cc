@@ -1,58 +1,41 @@
 #include "../source/server.hpp"
 #include <cstdlib>
 // #include "../source/baseSource.hpp"
-//写入->HandleRead->向Send 先压入任务池中
 
-
-void HandleClose(Channel* channel){
-    DBG_LOG("Close: %d", channel->Fd());
-    channel->Remove(); //移除监控
-    delete channel;
-}
-void HandleRead(Channel* channel){
-    int fd = channel->Fd();
-    char buf[1024] = {0};
-    int ret = recv(fd, buf, 1023, 0);
-    if(ret <= 0){
-        HandleClose(channel); //关闭释放
-    }
-    DBG_LOG("%s", buf);
-    channel->EnableWrite(); //启动可写事件
-}
-void HandleWrite(Channel* channel){
-    int fd = channel->Fd();
-    const char* data = "Test: HandleWrite \n";
-    int ret = send(fd, data, strlen(data), 0);
-    if(ret < 0){
-        HandleClose(channel);
-    }
-    channel->DisableWrite(); //关闭写监控
+uint64_t conn_id = 0;
+void OnMessage(const PtrConnection& conn, Buffer* buf){
+    DBG_LOG("%s", buf->ReadPosition());
+    buf->MoveReadOffset(buf->ReadAbleSize());
+    std::string str = "HELLO WROLD!";
+    conn->Send(str.c_str(), str.size());
+    // conn->ShutDown();
 }
 
-void HandleError(Channel* channel){
-    HandleClose(channel);
+std::unordered_map<uint64_t, PtrConnection> _conns;
+void ConnectionDestroy(const PtrConnection& conn){
+    _conns.erase(conn->Id());
 }
-void HandleEvent(EventLoop* loop, Channel* channel, uint64_t id){
-    loop->TimerRefresh(id);
+void OnConnected(const PtrConnection& conn){
+    DBG_LOG("NEW CONNECTION : %p", conn.get());
 }
 void Acceptor(EventLoop* loop, Channel* lst_channel){
     int fd = lst_channel->Fd();
     int newfd = accept(fd, nullptr, nullptr);
     if(newfd < 0) return ;
 
-    uint64_t timerid = rand() % 10000;
-    Channel* channel = new Channel(loop, newfd);
-    //为通信套接字设置可读事件回调函数
-    channel->SetReadCallBack(std::bind(HandleRead, channel)); 
-    channel->SetWriteCallBack(std::bind(HandleWrite, channel));
-    channel->SetCloseCallBack(std::bind(HandleClose, channel));
-    channel->SetErrorCallBack(std::bind(HandleError, channel));
-    channel->SetEventCallBack(std::bind(HandleEvent, loop, channel, timerid));
-    channel->EnableRead();
+    PtrConnection conn(new Connection(loop, conn_id, newfd));
+
+    conn->SetMessageCallBack(std::bind(OnMessage, std::placeholders::_1, std::placeholders::_2)); 
+    conn->SetServerClosedCallBack(std::bind(ConnectionDestroy, std::placeholders::_1));
+    conn->SetConnectedCallBack(std::bind(OnConnected, std::placeholders::_1));
     
-    //非活跃连接的超时释放操作,10s后关闭连接
-    /*注意定时销毁任务必须在启动读事件之前，因为有可能启动了事件监控后，立刻就有了事件，但是这时候还没有任务*/
-    loop->TimerAdd(timerid, 10, std::bind(HandleClose, channel));
+    //启动非活跃连接销毁
+    conn->EnableInactiveRelease(10);
+    //就绪初始化
+    conn->Established();
+    //用map管理起来
+    _conns.insert({conn_id, conn});
+    conn_id++;
 }
 int main(){
     srand(time(nullptr));
