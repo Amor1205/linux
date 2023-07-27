@@ -7,8 +7,10 @@
 #include <unordered_map>
 #include <memory>
 #include <mutex>
+#include <condition_variable>
 #include <thread>
-#include <ctime>    
+#include <ctime>   
+#include <cstdlib>
 #include <functional>
 
 #include <unistd.h>
@@ -24,10 +26,10 @@
 #define INF 0
 #define DBG 1
 #define ERR 2
-#define LOG_LEVEL DBG
+#define LOG_LEVEL INF
 #define LOG(level, format, ...) do{\
 	if(level < LOG_LEVEL) break;\
-	time_t t = time(nullptr);\
+	time_t t = time(NULL);\
 	struct tm* ltm = localtime(&t);\
 	char tmp[32] = {0};\
 	strftime(tmp, 31, "%H:%M:%S", ltm);\
@@ -41,7 +43,7 @@
 
 
 
-const uint64_t BUFFER_DEFAULT_SIZE = 1024;
+#define BUFFER_DEFAULT_SIZE 1024
 class Buffer{
 private:
     std::vector<char> _buffer; //使用vector 进行内存空间管理
@@ -103,7 +105,7 @@ public:
         //拷贝数据进缓冲区
         EnsureWriteSpaceEnough(len);
         const char* d = (const char*) data;
-        std::copy(d, d+len, WritePosition());
+        std::copy(d, d + len, WritePosition());
     }
     void WriteString(const std::string& data){
         return Write(&data[0], data.size());
@@ -111,6 +113,18 @@ public:
     //读取数据
     void WriteBuffer(Buffer& data){
         return Write(data.ReadPosition(),data.ReadAbleSize());
+    }
+    void WriteAndPush(const void* data, uint64_t len){
+        Write(data, len);
+        MoveWriteOffset(len);
+    }
+    void WriteStringAndPush(std::string& data){
+        WriteString(data);
+        MoveWriteOffset(data.size());
+    }
+    void WriteBufferAndPush(Buffer& data){
+        WriteBuffer(data);
+        MoveWriteOffset(data.ReadAbleSize());
     }
     void Read(void* buf, uint64_t len){
         //要求获取数据大小必须小于可读数据大小
@@ -140,18 +154,7 @@ public:
         MoveReadOffset(len);
         return str;
     }
-    void WriteAndPush(const void* data, uint64_t len){
-        Write(data, len);
-        MoveWriteOffset(len);
-    }
-    void WriteStringAndPush(std::string& data){
-        WriteString(data);
-        MoveWriteOffset(data.size());
-    }
-    void WriteBufferAndPush(Buffer& data){
-        WriteBuffer(data);
-        MoveWriteOffset(data.ReadAbleSize());
-    }
+
     //获取一行
     char* FindCRLF(){
         //字符查找
@@ -182,8 +185,8 @@ private:
 public:
     Socket() :_sockfd(-1){}
     Socket(int fd) :_sockfd(fd){}
-    ~Socket() {Close();}
-    int Fd() {return _sockfd;}
+    ~Socket() { Close(); }
+    int Fd() { return _sockfd; }
     bool CreateFd(){
         //int socket(int domain, int type, int protocol);
         _sockfd = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
@@ -252,7 +255,7 @@ public:
                 //EAGAIN ： socket 接收缓冲区没有数据了，只在非阻塞情况下有这个报错
                 //EINTR ： 当前socket阻塞等待被信号打断了
             }
-            ERR_LOG("RECV FAILED!\n");
+            ERR_LOG("SOCKET RECV FAILED!\n");
             return -1;
         }
         return ret;//实际接收到的数据长度
@@ -262,7 +265,9 @@ public:
         //ssize_t send (int sockfd, void* data, size_t len, int flag);
         ssize_t ret = send(_sockfd, buf, len ,flag);
         if(ret < 0){
-            if (errno == EAGAIN || errno == EINTR) return 0;
+            if (errno == EAGAIN || errno == EINTR) { 
+                return 0; 
+            }
             ERR_LOG("SOCKET SEND FAILED!\n");
             return -1;
         }
@@ -270,7 +275,6 @@ public:
         //有可能没发送完
     }
     ssize_t NonBlockRecv(void* buf, size_t len){
-        if (len == 0) return 0;
         return Recv(buf, len, MSG_DONTWAIT); 
         //MSG_DONTWAIT:当前接收为非阻塞，没数据就会报错返回
     }
@@ -365,23 +369,20 @@ public:
     //事件处理，一旦链接出触发事件就调用这个函数，自己触发什么事件如何处理由组件使用者自己定。
     void HandleEvent(){
         if ((_revents & EPOLLIN) || (_revents & EPOLLRDHUP) || (_revents & EPOLLPRI)){
-            if (_event_callback) _event_callback();
             if (_read_callback) _read_callback();
         }
         //有可能会释放连接的操作，一次只能处理一个
         if (_revents & EPOLLOUT){
-            if (_event_callback) _event_callback();
             if (_write_callback) _write_callback();
         }
         //一旦出错，就会释放连接，因此要放到前面调用任意回调
         else if (_revents & EPOLLERR){
             if (_error_callback) _error_callback(); 
-            if (_event_callback) _event_callback();
         }
         else if (_revents & EPOLLHUP){
             if (_close_callback) _close_callback();
-            if (_event_callback) _event_callback();
         }
+        if (_event_callback) _event_callback();
     }   
 };
 
@@ -436,7 +437,9 @@ public:
     //移除监控
     void RemoveEvent(Channel* channel){
         auto it = _channels.find(channel->Fd());
-        if (it != _channels.end()) _channels.erase(it);
+        if (it != _channels.end()) {
+            _channels.erase(it);
+        }
         Update(channel, EPOLL_CTL_DEL);
     }
     //开始监控，返回活跃连接
@@ -640,7 +643,8 @@ public:
         uint64_t res = 0;
         int ret = read(_event_fd, &res, sizeof(res));
         if (res < 0){
-            if (errno == EINTR) return;
+            //EINTR 被信号打断 EAGAIN 无数据可读
+            if (errno == EINTR || errno == EAGAIN) return;
             ERR_LOG("READ EVENTFD FAILED!\n");
             abort();//异常退出
         }
@@ -650,8 +654,7 @@ public:
         uint64_t val = 1;
         int ret = write(_event_fd, &val, sizeof(val));
         if (ret < 0){
-            //EINTR 被信号打断 EAGAIN 无数据可读
-            if(errno == EINTR || errno == EAGAIN) return;
+            if(errno == EINTR) return;
             ERR_LOG("WRITE EVENTFD FAILED!\n");
             abort();
         }
@@ -674,33 +677,45 @@ public:
     bool IsInLoop(){
         return _thread_id == std::this_thread::get_id();
     }
+    void AssertInLoop() {
+        assert(_thread_id == std::this_thread::get_id());
+    }
     //判断将要执行的任务是在当前线程中还是不在，如果是则执行，否则压入队列中。
     void RunInLoop(const Functor& cb){
         if (IsInLoop()){
             return cb();
         }
+        return QueueInLoop(cb);
     }
     //将操作压入队列中
     void QueueInLoop(const Functor& cb){
         //如果我把任务压入任务池后，需要唤醒有可能因为没有事件就绪而导致的epoll阻塞
-        std::unique_lock<std::mutex> _lock(_mutex);
-        _tasks.push_back(cb);
+        {
+            std::unique_lock<std::mutex> _lock(_mutex);
+            _tasks.push_back(cb);
+        }
         //其实唤醒就是向eventfd 写入一个数据，eventfd 就会触发可读事件，就不会再阻塞了
         WeakUpEventFd();
     }
 
     //修改/添加描述符的事件监控
-    void UpdateEvent(Channel* channel) {return _poller.UpdateEvent(channel);}
+    void UpdateEvent(Channel* channel) {
+        return _poller.UpdateEvent(channel);
+    }
     //移除描述符的监控
-    void RemoveEvent(Channel* channel) {return _poller.RemoveEvent(channel);}
+    void RemoveEvent(Channel* channel) {
+        return _poller.RemoveEvent(channel);
+    }
     //1.事件监控，事件处理，执行任务池
     void Start(){
-        std::vector<Channel*>  actives;
-        _poller.Poll(&actives);
-        for(auto &channel : actives){
-            channel->HandleEvent();
+        while(1){
+            std::vector<Channel*>  actives;
+            _poller.Poll(&actives);
+            for(auto &channel : actives){
+                channel->HandleEvent();
+            }
+            RunAllTask();
         }
-        RunAllTask();
     }
     void TimerAdd(uint64_t id, uint32_t delay, const TaskFunc& cb){ 
         return _timer_wheel.TimerAdd(id, delay, cb);
@@ -842,7 +857,7 @@ private:
         //1.
         char buf[65536];
         //调用非阻塞Recv，没有接收到返回0，否则>0
-        int ret = _socket.NonBlockRecv(buf, sizeof(buf));
+        int ret = _socket.NonBlockRecv(buf, 65535);
         if (ret < 0){
             //recv出错，不能直接关闭连接，看发送缓冲区有无数据待处理
             //非直接关闭接口
@@ -870,13 +885,15 @@ private:
                 }
             }
             //然后调用关闭接口（实际关闭）
-            return ReleaseInLoop(); 
+            return Release(); 
         }
         _out_buffer.MoveReadOffset(ret); //一定要向后偏移
         if (_out_buffer.ReadAbleSize() == 0){
             _channel.DisableWrite(); //关闭写事件监控
             //如果当前是连接待关闭状态，有数据发送完数据后，释放连接，没有数据就直接释放
-            if (_statu == DISCONNECTING) return ReleaseInLoop();
+            if (_statu == DISCONNECTING) {
+                return Release();
+            }
         }
         return;
     }
@@ -1067,8 +1084,11 @@ public:
         _loop->RunInLoop(std::bind(&Connection::SendInLoop, this, buf));
     }
     //提供给组件使用者的关闭接口，不会直接关闭，先处理完业务
-    void ShutDown(){
+    void ShutDown() {
         _loop->RunInLoop(std::bind(&Connection::ShutDownInLoop,this));
+    }
+    void Release() {
+        _loop->QueueInLoop(std::bind(&Connection::ReleaseInLoop, this));
     }
     //启动非活跃销毁，并定义多长时间无通信就是非活跃，添加定时任务
     void EnableInactiveRelease(int sec){
@@ -1087,5 +1107,82 @@ public:
         /*这个接口必须在EventLoop*/
         AssertInLoop();
         _loop->RunInLoop(std::bind(&Connection::UpgradeInLoop, this, context, conncb, msgcb, closecb, anycb));
+    }
+};
+
+class Acceptor{
+private:
+    Socket _socket; //用于创建监听套接字
+    EventLoop* _loop; //用于对监听套接字进行事件监控
+    Channel _channel; //用于对监听套接字进行事件管理
+
+    using AcceptCallBack = std::function<void(int)>;
+    AcceptCallBack _accept_callback;
+private:
+    /*监听套接字的读事件回调处理函数 -- 获取新连接，调用_accept_cb函数进行新连接数据处理*/
+    void HandleRead() {
+        int newfd = _socket.Accept();
+        if (newfd < 0){
+            return;
+        }
+        if (_accept_callback) _accept_callback(newfd);
+    }
+    int CreateServer(int port) {
+        //创建服务器
+        bool ret = _socket.CreateServer(port);
+        assert(ret == true);
+        return _socket.Fd();
+    }
+public:
+    /*不能将启动读事件监控放到构造函数中，必须在设置回调函数后再去启动*/
+    /*否则有可能造成启动监控后立即有事件，处理的时候回调函数还没有设置，新连接得不到处理，而且资源有泄漏*/
+    Acceptor(EventLoop* loop, int port) :_socket(CreateServer(port)),_loop(loop),_channel(loop, _socket.Fd()) {
+        _channel.SetReadCallBack(std::bind(&Acceptor::HandleRead,this));
+    }
+    void SetAcceptCallBack(const AcceptCallBack& cb){
+        _accept_callback = cb;
+    }
+    void Listen() {
+        _channel.EnableRead();
+    }
+};
+
+class LoopThread{
+private:
+    /*用于实现_loop获取的同步关系，避免线程创建了但是_loop还没实例化前就去获取_loop*/
+    std::mutex _mutex; //互斥锁
+    std::condition_variable _cond; //条件变量
+    //我们不能直接实例化EventLoop,否则是在主线程内部进行实例化和绑定threadid
+    EventLoop* _loop; //EventLoop 对象指针变量，这个对象需要在线程内部实例化
+    std::thread _thread; //EventLoop对应的线程
+
+private:
+    /*实例化EventLoop对象，并且开始运行EventLoop*/
+    /*需要唤醒cond上有可能阻塞的线程*/
+    void ThreadEntry() {
+        EventLoop loop;
+        {
+            std::unique_lock<std::mutex> lock(_mutex);
+            _loop = &loop;
+            _cond.notify_all();
+        }
+        //循环运行
+        loop.Start();
+    }
+public:
+    /*创建线程，设定线程入口函数*/
+    LoopThread() :_loop(nullptr), _thread(std::thread(&LoopThread::ThreadEntry, this)){}
+    /*返回当前线程关联的EventLoop指针*/
+    /*当我们的线程还没有实例化，直接获取是获取到nullptr的，需要加互斥锁和条件变量*/
+    EventLoop* GetLoop(){
+        EventLoop* loop = nullptr;
+        {
+            //加锁
+            std::unique_lock<std::mutex> lock(_mutex);
+            //lambda表达式：loop为空就一直阻塞等待
+            _cond.wait(lock, [&](){return _loop != nullptr;});
+            loop = _loop;
+        }
+        return loop;
     }
 };
