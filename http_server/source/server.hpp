@@ -18,6 +18,7 @@
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -1186,3 +1187,149 @@ public:
         return loop;
     }
 };
+
+class LoopThreadPool{
+private:
+    int _thread_count; //线程数量
+    int _next_loop_idx; //线程控制idx
+    EventLoop* _base_loop; //运行在主线程，从属线程数量为0时，所有操作都在baseloop中进行
+    std::vector<LoopThread*> _threads; //保存所有的LoopThread 对象
+    std::vector<EventLoop*> _loops; //从属线程数量大于0，从loops进行线程eventloop分配
+public:
+    LoopThreadPool(EventLoop* baseloop):_thread_count(0), _next_loop_idx(0),_base_loop(baseloop){}
+    void SetThreadCount(int count){
+        _thread_count = count;
+    }
+    void Create(){
+        if (_thread_count > 0) {
+            _threads.resize(_thread_count);
+            _loops.resize(_thread_count);
+            for (int i = 0; i < _thread_count; ++i) {
+                //创建thread之前，有操作都是会阻塞的
+                _threads[i] = new LoopThread();
+                _loops[i] = _threads[i]->GetLoop();
+                //先去Create 然后再去启动baseloop
+            }
+        }
+        return;
+    }
+    EventLoop* NextLoop() {
+        if (_thread_count == 0) {
+            return _base_loop;
+        }
+        _next_loop_idx = (_next_loop_idx + 1) % _thread_count;
+        return _loops[_next_loop_idx];
+    }
+};
+
+class TcpServer{
+private:
+    uint64_t _next_id; //自动增长的连接id
+    int _port;
+    int _timeout; //非活跃连接的统计时间 -- 多长时间未通信是非活跃连接
+    bool _enable_inactive_release; //是否启动非活跃超时连接销毁
+    EventLoop _base_loop; //主线程的EventLoop对象，负责监听事件的处理
+    Acceptor _acceptor; //监听套接字的管理对象
+    LoopThreadPool _pool; //从属线程池
+    std::unordered_map<uint64_t, PtrConnection> _conns; //保存管理所有连接对应的shared_ptr对象
+    using Functor = std::function<void()>;
+    using ConnectedCallBack = std::function<void(const PtrConnection&)>;
+    using MessageCallBack = std::function<void(const PtrConnection&, Buffer*)>;
+    using ClosedCallBack = std::function<void(const PtrConnection&)>;
+    using AnyEventCallBack = std::function<void(const PtrConnection&)>;
+    ConnectedCallBack _connected_callback;
+    MessageCallBack _message_callback;
+    ClosedCallBack _closed_callback;
+    ClosedCallBack _server_closed_callback;
+    AnyEventCallBack _event_callback;
+
+private:
+    //为新连接构造一个Connection 进行管理
+    void NewConnection(int fd) {
+        _next_id++;
+        PtrConnection conn(new Connection(_pool.NextLoop(), _next_id, fd));
+        conn->SetMessageCallBack(_message_callback); 
+        conn->SetConnectedCallBack(_connected_callback);
+        conn->SetClosedCallBack(_closed_callback);
+        conn->SetAnyEventCallBack(_event_callback);
+        conn->SetServerClosedCallBack(std::bind(&TcpServer::RemoveConnection, this, std::placeholders::_1));
+        
+        //启动非活跃连接销毁
+        if(_enable_inactive_release == true) {
+            conn->EnableInactiveRelease(_timeout);
+        }
+        //就绪初始化
+        conn->Established();
+        //用map管理起来
+        _conns.insert({_next_id, conn});
+    }
+    void RemoveConnectionInLoop(const PtrConnection& conn) {
+        int id = conn->Id();
+        auto it = _conns.find(id);
+        if (it != _conns.end()) {
+            _conns.erase(it);
+        }
+    }
+    //从管理Connection的_conns 移除连接信息，如果不移除连接将不会被释放
+    void RemoveConnection(const PtrConnection& conn) {
+        _base_loop.RunInLoop(std::bind(&TcpServer::RemoveConnectionInLoop, this, conn));
+    } 
+    void RunAfterInLoop(const Functor& task, int delay) {
+        _next_id ++;
+        _base_loop.TimerAdd(_next_id, delay, task);
+    }
+public:
+    TcpServer(int port) 
+        :_port(port),
+        _next_id(0),
+        _enable_inactive_release(false),
+        _acceptor(&_base_loop, port),
+        _pool(&_base_loop)
+    {
+        _acceptor.SetAcceptCallBack(std::bind(&TcpServer::NewConnection, this, std::placeholders::_1));
+        _acceptor.Listen(); //将监听套接字挂到baseloop上开始监控事件
+    }
+    void SetThreadCount(int count) {
+        return _pool.SetThreadCount(count);
+    }
+    void EnableInactiveRelease(int timeout) {
+        _timeout = timeout;
+        _enable_inactive_release = true;
+    }
+    void Start() {
+        _pool.Create();     //创建线程池中的从属线程
+        //构造函数已经完成了创建和监听
+        _base_loop.Start(); //开始处理
+    }
+    //用来添加一个定时任务
+    void RunAfter(const Functor& task, int delay) {
+        _base_loop.RunInLoop(std::bind(&TcpServer::RunAfterInLoop, this, task, delay));
+    }
+
+    //设置回调函数
+    void SetConnectedCallBack(const ConnectedCallBack& cb){
+        _connected_callback = cb;
+    }
+    void SetMessageCallBack(const MessageCallBack& cb){
+        _message_callback = cb;
+    }
+    void SetClosedCallBack(const ClosedCallBack& cb){
+        _closed_callback = cb;
+    }
+    void SetAnyEventCallBack(const AnyEventCallBack& cb){
+        _event_callback = cb;
+    }
+    void SetServerClosedCallBack(const ClosedCallBack& cb){
+        _server_closed_callback = cb;
+    }
+
+};
+
+class NetWork {
+public:
+    NetWork(){
+        DBG_LOG("SIGPIPE SIG_IGN INIT");
+        signal(SIGPIPE, SIG_IGN);
+    }
+}; 
+static NetWork nw;
