@@ -1,6 +1,7 @@
 #ifndef __SERVER_H__
 #define __SERVER_H__
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <string>
 #include <cstring>
