@@ -1,4 +1,4 @@
-#include "../server.hpp"
+#include "../source/server.hpp"
 
 class Utility {
 public:
@@ -37,7 +37,7 @@ public:
         fsize = ifs.tellg();
         ifs.seekg(0, ifs.beg);
         buf.resize(fsize);
-        ifs.read(&str[0], fsize);
+        ifs.read(&buf[0], fsize);
         if( ifs.good() == false) {
             ERR_LOG("READ %s FILE ERROR!\n", filename.c_str());
             ifs.close();
@@ -294,9 +294,350 @@ public:
         return it->second;
     }
     //判断一个文件是否是一个目录
-    static bool IsDirectory();
+    static bool IsDirectory(const std::string& filename) {
+        struct stat st;
+        int ret = stat(filename.c_str(), &st);
+        if (ret < 0) {
+            return false;
+        }
+        return S_ISDIR(st.st_mode);
+    }
     //判断一个文件是否是一个普通文件
-    static bool IsRegular();
+    static bool IsRegular(const std::string& filename) {
+        struct stat st;
+        int ret = stat(filename.c_str(), &st);
+        if (ret < 0) {
+            return false;
+        }
+        return S_ISREG(st.st_mode);
+    }
     //HTTP请求的资源路径有效性判断
-    static bool ValidPath();
+    // /index.html -- 前面的叫做相对根目录，映射的事某个服务器上的子目录
+    // 想表达的意思就是客户端只能请求相对根目录中的资源，其他地方的资源都不予理会
+    // /../login，这个路径中的..会让路径的查找跑到相对根目录之外，不合理而且不安全
+    static bool ValidPath(const std::string& path) {
+        //思想：按照/进行路径分割，根据有多少子目录，计算目录深度，有多少层。
+        int level = 0;
+        std::vector<std::string> subdir;
+        Split(path, "/", subdir);
+        for (auto& dir : subdir) {
+            if (dir == "..") {
+                level--;
+                if (level < 0) {
+                    return false;
+                }
+            }
+            else {
+                level++;
+            }
+        }
+        return true;
+    }
+};
+
+class HttpRequest {
+public:
+    std::string _method; //请求方法 GET / POST
+    std::string _path;   //请求资源路径
+    std::string _version;//HTTP协议版本 HTTP/1.1
+    std::string _body;   //请求正文
+    std::string _matches;//资源路径的正则提取数据
+    std::unordered_map<std::string, std::string> _headers; //头部字段
+    std::unordered_map<std::string, std::string> _params;  //查询字符串
+public:
+    //插入头部字段
+    void SetHeader(const std::string& key, const std::string& val) {
+        _headers.insert({key, val});
+    }
+    //判断是否存在指定头部字段
+    bool HasHeader(const std::string& key) {
+        auto it = _headers.find(key);
+        if (it == _headers.end()) {
+            return false;
+        }
+        return true;
+    }
+    //获取指定头部字段值
+    std::string GetHeader(const std::string& key) {
+        auto it = _headers.find(key);
+        if (it == _headers.end()) {
+            return "";
+        }
+        return it->second;
+    }
+    //插入查询字符串
+    void SetParam(const std::string& key, const std::string& val) {
+        _params.insert({key, val});
+    }
+    //判断是否存在指定查询字符串
+    bool HasParam(const std::string& key) {
+        auto it = _params.find(key);
+        if (it == _params.end()) {
+            return false;
+        }
+        return true;
+    }
+    //获取指定查询字符串
+    std::string GetParam(const std::string& key) {
+        auto it = _params.find(key);
+        if (it == _params.end()) {
+            return "";
+        }
+        return it->second;
+    }
+    //获取正文长度
+    size_t ContentLength() {
+        //Content-Length :123456\r\n
+        bool ret = HasHeader("Content-Length");
+        if (ret == false) {
+            return 0;
+        }
+        return std::stol(GetHeader("Content-Length"));
+    }
+    //判断是否为长链接 长-true 短-false
+    bool IsPersistentConnection() {
+        //没有Connection字段或者有但是设置值为close 
+        bool ret = HasHeader("Connection") && GetHeader("Connection") == "keep-alive";
+        if (ret == true) {
+            return true;
+        }
+        return false;
+    }
+};
+
+class HttpResponse {
+private:
+    int _statu;
+    bool _redirect_flag;
+    std::string _redirect_url;
+    std::string _body;
+    std::unordered_map<std::string, std::string> _headers;
+public:
+    HttpResponse() :_redirect_flag(false), _statu(200) {}
+    HttpResponse(int statu) :_redirect_flag(false), _statu(statu) {}
+    //重置
+    void Reset() {
+        _statu = 200;
+        _redirect_flag = false;
+        _redirect_url.clear();
+        _body.clear();
+        _headers.clear();
+    }
+    //插入头部字段
+    void SetHeader(const std::string& key, const std::string& val) {
+        _headers.insert({key, val});
+    }
+    //判断是否存在指定头部字段
+    bool HasHeader(const std::string& key) {
+        auto it = _headers.find(key);
+        if (it == _headers.end()) {
+            return false;
+        }
+        return true;
+    }
+    //获取指定头部字段值
+    std::string GetHeader(const std::string& key) {
+        auto it = _headers.find(key);
+        if (it == _headers.end()) {
+            return "";
+        }
+        return it->second;
+    }
+    void SetContent(std::string& body, std::string& type) {
+        _body = body;
+        SetHeader("Content-Type", type);
+    }
+    //设置重定向
+    void SetRedirect(std::string& new_url, int statu = 302) {
+        _statu = statu;
+        _redirect_flag = true;
+        _redirect_url = new_url;
+    }
+    //判断是否为长连接 是 - true
+    bool IsPersistentConnection() {
+        //没有Connection字段或者有但是设置值为close 
+        bool ret = HasHeader("Connection") && GetHeader("Connection") == "keep-alive";
+        if (ret == true) {
+            return true;
+        }
+        return false;
+    }
+};
+typedef enum {
+    RECV_HTTP_ERROR,
+    RECV_HTTP_LINE,
+    RECV_HTTP_HEAD,
+    RECV_HTTP_BODY,
+    RECV_HTTP_OVER
+}HttpRecvStatu;
+
+#define MAX_LINE_SIZE 8192
+class HttpContext {
+private:
+    int _resp_statu; //响应状态码
+    HttpRecvStatu _recv_statu; //当前接收和解析的状态
+    HttpRequest _request; //已经解析得到的请求信息
+private:
+    //接收http请求行
+    bool RecvHttpLine(Buffer* buf) {
+        if (_recv_statu != RECV_HTTP_LINE) {
+            return false;
+        }
+        //1. 获取一行数据
+        //但是需要考虑：缓冲区的数据不足一行，获取的一行数据量非常大
+        
+        std::string line = buf->GetLine();
+        if (line.size() == 0) {
+            //缓冲区的数据不足一行，需要判断缓冲区的可读数据长度
+            //如果很长了都不足一行，有问题
+            if (buf->ReadAbleSize() > MAX_LINE_SIZE) {
+                _recv_statu = RECV_HTTP_ERROR;
+                _resp_statu = 414; //URI TOO LONG
+                return false;
+            }
+            //缓冲区的数据不足一行，但是也不够多，等到新的数据的到来
+            return true;
+        }
+        if (line.size() > MAX_LINE_SIZE) {
+            _recv_statu = RECV_HTTP_ERROR;
+            _resp_statu = 414; //URI TOO LONG
+            return false;
+        }
+        bool ret = ParseHttpLine(line);
+        if(ret == false) {
+            return false;
+        }
+        buf->MoveReadOffset(line.size());
+        //首行处理完毕，进入头部获取阶段
+        _recv_statu = RECV_HTTP_HEAD;
+        return true;
+    }
+    //解析Http请求行
+    bool ParseHttpLine(const std::string& line) {
+        std::smatch matches;
+        std::regex e("(GET|HEAD|POST|PUT|DELETE) ([^?]*)(?:\\?(.*)) (HTTP/1\\.[01])(?:\n|\r\n)?");
+        bool ret = std::regex_match(line, matches, e);
+        if(ret == false)
+        {
+            _recv_statu = RECV_HTTP_ERROR;
+            _resp_statu = 400; //bad request
+            return false;
+        }
+        //第0个：url本身
+        //第1个：请求方法
+        //第2个：资源路径
+        //第3个：查询字符串
+        //第4个：协议版本
+
+        //获取请求方法
+        _request._method = matches[1];
+        //获取资源路径，需要进行URL解码操作，但是不用+转space
+        _request._path = Utility::UrlDecode(matches[2], false);
+        //获取协议版本
+        _request._version = matches[4];
+        //查询字符串的获取和处理
+        std::string query_string = matches[3];  
+        std::vector<std::string> query_string_array;
+        //按照等号分割字符串
+        //查询字符串格式： key=val&key=val ....
+        //先& 进行分割，针对各个子串 以=进行分割，得到后也需要进行url解码
+        Utility::Split(query_string, "&", query_string_array);
+        for(auto& s : query_string_array) { 
+            //按照等号来进行分割
+            size_t pos = str.find("=");
+            if (pos == std::string::npos) {
+                _recv_statu = RECV_HTTP_ERROR;
+                _resp_statu = 400; //bad request
+                return false;
+            }
+            //
+            std::string key = Utility::UrlDecode(s.substr(0, pos), true);
+            std::string val = Utility::UrlDecode(s.substr(pos + 1), true);
+            _request.SetParam(key, val);
+        }
+        return true;
+    }
+    //接收http头部
+    bool RecvHttpHead(Buffer* buf) {
+        if (_recv_statu != RECV_HTTP_HEAD) {
+            return false;
+        }
+        //一行一行的取出数据，直到遇到空行为止，头部的格式 key: val\r\nkey: val\r\n...
+        while (1) {
+            std::string line = buf->GetLine();
+            if (line.size() == 0) {
+                //缓冲区的数据不足一行，需要判断缓冲区的可读数据长度
+                //如果很长了都不足一行，有问题
+                if (buf->ReadAbleSize() > MAX_LINE_SIZE) {
+                    _recv_statu = RECV_HTTP_ERROR;
+                    _resp_statu = 414; //URI TOO LONG
+                    return false;
+                }
+                //缓冲区的数据不足一行，但是也不够多，等到新的数据的到来
+                return true;
+            }
+            if (line.size() > MAX_LINE_SIZE) {
+                _recv_statu = RECV_HTTP_ERROR;
+                _resp_statu = 414; //URI TOO LONG
+                return false;
+            }
+            if (line == "\n" || line == "\r\n") {
+                break;
+            }
+            bool ret = ParseHttpHead(line);
+            if (ret == false) {
+                return false;
+            }
+        }
+        _recv_statu = RECV_HTTP_BODY;
+        return true;
+    }
+    //解析http头部
+    bool ParseHttpHead(const std::string& line) {
+        //key: val
+        size_t pos = line.find(": ");
+        if (pos == std::string::npos) {
+            _recv_statu = RECV_HTTP_ERROR;
+            _resp_statu = 400; //bad request
+            return false;
+        }
+        std::string key = s.substr(0, pos);
+        std::string val = s.substr(pos + 2);
+        _request.SetHeader(key, val);
+    }
+    //接收http正文
+    bool RecvHttpBody(Buffer* buf) {
+        if (_recv_statu != RECV_HTTP_BODY) {
+            return false;
+        }  
+        //1. 获取正文长度
+        size_t content_length = _request.ContentLength();
+        if (content_length == 0) {
+            //无正文，请求接收解析完毕
+            _recv_statu = RECV_HTTP_OVER;
+            return true;
+        }
+        //2. 当前已经接收到了多少正文 其实就是往_request._body 里放了多少数据，
+        // 其实就是_request._body.size()
+        size_t content_len_wait_recv = content_length - _request._body.size();
+        //3. 接收正文放到body中，也要考虑当前缓冲区的数据是否是全部正文
+        //  3.1 缓冲区中的数据，如果包含了当前数据的所有正文，取出所需数据
+        if (buf->ReadAbleSize() >= content_len_wait_recv) {
+            _request._body.append(buf->ReadPosition(), content_len_wait_recv);
+            buf->MoveReadOffset(content_len_wait_recv);
+            _recv_statu = RECV_HTTP_OVER;
+            return true;
+        }
+        //  3.2 缓冲区的数据，若无法满足当前正文需要，数据不足，取出全部数据，等待新数据到来
+        _request._body.append(buf->ReadPosition(), buf->ReadAbleSize());
+        buf->MoveReadOffset(buf->ReadAbleSize());
+        //不改状态，直接返回
+        return true;
+    }
+public:
+    HttpContext() :_resp_statu(200), _recv_statu(RECV_HTTP_LINE) {}
+    int ResponseStatu();
+    HttpRecvStatu RecvStatu();
+    HttpRequest& Request(); //
+    void RecvRequest(); //接收并解析HTTP请求
 };

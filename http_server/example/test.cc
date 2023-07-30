@@ -1,10 +1,11 @@
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <vector>
-#include "../source/server.hpp"
+#include "../http/http.hpp"
+// #include <iostream>
+// #include <fstream>
+// #include <string>
+// #include <vector>
+// #include "../source/server.hpp"
 
-
+/*
 size_t Split(const std::string& src, const std::string& sep, std::vector<std::string>& array) {
     int offset = 0;
     //offset 是查找的起始位置，应该小于size，==size已经越界了
@@ -290,6 +291,44 @@ size_t Split(const std::string& src, const std::string& sep, std::vector<std::st
         }
         return it->second;
     }   
+
+        //判断一个文件是否是一个目录
+    static bool IsDirectory(const std::string& filename) {
+        struct stat st;
+        int ret = stat(filename.c_str(), &st);
+        if (ret < 0) {
+            return false;
+        }
+        return S_ISDIR(st.st_mode);
+    }
+    //判断一个文件是否是一个普通文件
+    static bool IsRegular(const std::string& filename) {
+        struct stat st;
+        int ret = stat(filename.c_str(), &st);
+        if (ret < 0) {
+            return false;
+        }
+        return S_ISREG(st.st_mode);
+    }
+    static bool ValidPath(const std::string& path) {
+        //思想：按照/进行路径分割，根据有多少子目录，计算目录深度，有多少层。
+        int level = 0;
+        std::vector<std::string> subdir;
+        Split(path, "/", subdir);
+        for (auto& dir : subdir) {
+            if (dir == "..") {
+                level--;
+                if (level < 0) {
+                    return false;
+                }
+            }
+            else {
+                level++;
+            }
+        }
+        return true;
+    }
+    */
 int main() {
     /*test1*/
     /*
@@ -346,7 +385,15 @@ int main() {
     std::cout << tmp << ']' << std::endl;
     */
 
-   std::cout << ExtMime("a.png") << std::endl;
+   /*test5*/
+//    std::cout << IsRegular("http") << std::endl;
+//    std::cout << IsDirectory("../http") << std::endl;
+//    std::cout << IsRegular("timerfd.cc") << std::endl;
+//    std::cout << IsDirectory("timerfd.cc") << std::endl;
+
+//    std::cout << Utility().ValidPath("/linux/../../abc/d3f3") << std::endl;
+    HttpResponse();
+    // HttpRequest();
 
     return 0;
 }

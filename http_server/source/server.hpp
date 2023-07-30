@@ -15,10 +15,12 @@
 #include <ctime>   
 #include <cstdlib>
 #include <functional>
+#include <regex>
 
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
+#include <sys/stat.h>
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
 #include <signal.h>
