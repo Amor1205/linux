@@ -544,7 +544,7 @@ private:
         Utility::Split(query_string, "&", query_string_array);
         for(auto& s : query_string_array) { 
             //按照等号来进行分割
-            size_t pos = str.find("=");
+            size_t pos = s.find("=");
             if (pos == std::string::npos) {
                 _recv_statu = RECV_HTTP_ERROR;
                 _resp_statu = 400; //bad request
@@ -601,8 +601,8 @@ private:
             _resp_statu = 400; //bad request
             return false;
         }
-        std::string key = s.substr(0, pos);
-        std::string val = s.substr(pos + 2);
+        std::string key = line.substr(0, pos);
+        std::string val = line.substr(pos + 2);
         _request.SetHeader(key, val);
     }
     //接收http正文
@@ -636,8 +636,87 @@ private:
     }
 public:
     HttpContext() :_resp_statu(200), _recv_statu(RECV_HTTP_LINE) {}
-    int ResponseStatu();
-    HttpRecvStatu RecvStatu();
-    HttpRequest& Request(); //
-    void RecvRequest(); //接收并解析HTTP请求
+    int ResponseStatu() {
+        return _resp_statu;
+    }
+    HttpRecvStatu RecvStatu() {
+        return _recv_statu;
+    }
+    HttpRequest& Request() {
+        return _request;
+    }
+    //接收并解析HTTP请求
+    void RecvRequest(Buffer* buf) {
+        //状态机，不同状态做不同的事情， 但是不要break，因为处理完请求行后，应该立即处理头部，而不是退出等新数据
+        switch(_recv_statu) {
+            case RECV_HTTP_LINE: RecvHttpLine(buf);
+            case RECV_HTTP_HEAD: RecvHttpHead(buf);
+            case RECV_HTTP_BODY: RecvHttpBody(buf);
+        }
+        return;
+    }
+};
+
+class HttpServer {
+private:
+    using Handler = std::function<void(const HttpRequest&, HttpResponse&)>;
+    //这个资源路径指的是正则表达式，而不是实际的资源路径。
+    //匹配成功了就是这个资源路径
+    std::unordered_map<std::string, Handler> _get_route;
+    std::unordered_map<std::string, Handler> _put_route;
+    std::unordered_map<std::string, Handler> _post_route;
+    std::unordered_map<std::string, Handler> _delete_route;
+    std::string _basedir; //资源根目录
+    TcpServer _server;
+private:
+    //将httpresponse中的要素按照http协议格式进行组织，发送
+    void WriteResponse(PtrConnection& conn, const HttpRequest& req, HttpResponse* resp);
+    //静态资源的请求处理
+    bool FileHandler(const HttpRequest& req, HttpResponse* resp);
+    //功能性请求的分类处理
+    void Dispatcher(const HttpRequest& req, HttpResponse* resp) {
+        if (req._method == "GET") {
+            route_dispatcher(req, resp, _get_route);
+        }
+    }
+    void Route(const HttpRequest& req, HttpResponse* resp) {
+        //1. 对请求进行分辨，是一个静态资源请求还是功能性请求
+        // GET HEAD 都先默认为是静态资源请求
+        bool ret = FileHandler(req, resp);
+        if (ret == true) {
+            //请求处理完毕了
+            return;
+        }
+        Dispatcher(req, resp);
+    }
+    //设置上下文
+    void OnConnected();
+    //缓冲区数据解析+ 处理
+    void OnMessage(const PtrConnection& conn, Buffer* buf) {
+        //1. 获取上下文
+        HttpRequest* context = conn->GetContext()->get<HttpRequest>();
+        //2. 通过上下文对缓冲区数据进行解析，得到HttpRequest对象
+        context->RecvHttpRequest(buf);
+        HttpRequest& req = context->Request();
+        HttpResponse resp;
+        //3. 请求路由 + 业务处理
+        Route(req, &resp);
+        //4. 对HttpResponse 进行组织和发送
+        WriteResponse(conn, req, resp);
+        //5. 根据长短连接判断是否关闭连接或者继续处理
+        //短链接直接关闭
+        if (resp.IsPersistentConnection() == false) {
+            conn->ShutDown();
+        }
+    }
+public:
+    HttpServer();
+    void SetBaseDir(const std::string& basedir);
+    void Get(const std::string& pattern, Handler& handler);
+    void Post(const std::string& pattern, Handler& handler);
+    void Put(const std::string& pattern, Handler& handler);
+    void Delete(const std::string& pattern, Handler& handler);
+    void SetThreadCount(int count);
+    void EnableInactiveRelease(int timeout);
+    void Listen();
 };
