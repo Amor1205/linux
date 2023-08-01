@@ -341,10 +341,21 @@ public:
     std::string _path;   //请求资源路径
     std::string _version;//HTTP协议版本 HTTP/1.1
     std::string _body;   //请求正文
-    std::string _matches;//资源路径的正则提取数据
+    std::smatch _matches;//资源路径的正则提取数据
     std::unordered_map<std::string, std::string> _headers; //头部字段
     std::unordered_map<std::string, std::string> _params;  //查询字符串
 public:
+    HttpRequest():_version("HTTP/1.1") {}
+    void Reset() {
+        _method.clear();
+        _path.clear();
+        _version = "HTTP/1.1";
+        _body.clear();
+        std::smatch match;
+        _matches.swap(match);
+        _headers.clear();
+        _params.clear();
+    }
     //插入头部字段
     void SetHeader(const std::string& key, const std::string& val) {
         _headers.insert({key, val});
@@ -370,7 +381,7 @@ public:
         _params.insert({key, val});
     }
     //判断是否存在指定查询字符串
-    bool HasParam(const std::string& key) {
+    bool HasParam(const std::string& key) const {
         auto it = _params.find(key);
         if (it == _params.end()) {
             return false;
@@ -378,7 +389,7 @@ public:
         return true;
     }
     //获取指定查询字符串
-    std::string GetParam(const std::string& key) {
+    std::string GetParam(const std::string& key) const {
         auto it = _params.find(key);
         if (it == _params.end()) {
             return "";
@@ -386,7 +397,7 @@ public:
         return it->second;
     }
     //获取正文长度
-    size_t ContentLength() {
+    size_t ContentLength() const {
         //Content-Length :123456\r\n
         bool ret = HasHeader("Content-Length");
         if (ret == false) {
@@ -615,6 +626,7 @@ private:
         std::string key = line.substr(0, pos);
         std::string val = line.substr(pos + 2);
         _request.SetHeader(key, val);
+        return true;
     }
     //接收http正文
     bool RecvHttpBody(Buffer* buf) {
@@ -659,6 +671,7 @@ public:
     void Reset() {
         _resp_statu = 200;
         _recv_statu = RECV_HTTP_LINE;
+        _request.Reset();
     }
     //接收并解析HTTP请求
     void RecvRequest(Buffer* buf) {
@@ -672,12 +685,13 @@ public:
     }
 };
 
+#define DEFAULT_TIMEOUT 30
 class HttpServer {
 private:
-    using Handler = std::function<void(const HttpRequest&, HttpResponse&)>;
+    using Handler = std::function<void(const HttpRequest &, HttpResponse *)>;
     //如果每次都进行字符串正则匹配效率会低
     // using Handlers = std::unordered_map<std::string, Handler>;
-    using Handlers = std::unordered_map<std::regex, Handler>;
+    using Handlers = std::vector<std::pair<std::regex, Handler>>;
     //这个资源路径指的是正则表达式，而不是实际的资源路径。
     //匹配成功了就是这个资源路径
     Handlers _get_route;
@@ -740,17 +754,21 @@ private:
         if (Utility::IsRegular(req_path) == false) {
             return false;
         }
-        req._path = req_path; //如果请求就是静态资源请求，将path修改为实际存储路径，以便于后边的静态文件的处理
         return true;
     }
     //静态资源的请求处理
-    bool FileHandler(const HttpRequest& req, const HttpResponse* resp) {
-        bool ret = Utility::ReadFile(req._path, resp->_body);
-        if (ret == false) {
-            return false;
+    void FileHandler(const HttpRequest& req, HttpResponse* resp) {
+        std::string req_path = _basedir + req._path;
+        if (req_path.back() == '/') {
+            req_path += "index.html";
         }
-        std::string mime = Utility::ExtMime(req._path);
+        bool ret = Utility::ReadFile(req_path, resp->_body);
+        if (ret == false) {
+            return;
+        }
+        std::string mime = Utility::ExtMime(req_path);
         resp->SetHeader("Content-Type", mime);
+        return;
     }
     bool ErrorHandler(const HttpRequest& req, HttpResponse* resp) {
         //1. 组织一个错误展示页面，
@@ -772,14 +790,15 @@ private:
 
     }
     //功能性请求的分类处理
-    void Dispatcher(const HttpRequest& req, HttpResponse* resp, Handlers& handlers) {
+    void Dispatcher(HttpRequest& req, HttpResponse* resp, Handlers& handlers) {
         //在对应请求方法的路由表中查找是否含有对应资源请求的处理函数，如果有就调用，没有就返回405
         //思想：路由表中存储的是keyval对， 正则表达式 & 处理函数
         //使用正则表达式，对请求的字眼路径进行正则匹配，匹配成功就可以使用对应函数进行处理
         for (auto& handler : handlers) {
-            const std::regex& e = handler.first; 
+            const std::regex& re(handler.first); 
             const Handler& functor = handler.second;
-            bool ret = std::regex_match(req._path, req._matches, e);
+            bool ret = std::regex_match(req._path, req._matches, re);
+            // bool ret = std::regex_match(req._path, req._matches, re);
             if (ret == false) {
                 continue;
             }
@@ -823,12 +842,15 @@ private:
             //  1. 如果缓冲区的数据解析出错，回复出错响应
             //  2. 如果解析正常，且请求已经获取完毕，才会开始去进行处理
             context->RecvRequest(buf);
+            HttpRequest& req = context->Request();
             HttpResponse resp(context->RecvStatu());
             if (context->ResponseStatu() >= 400) {
                 //进行错误响应，关闭连接
                 //填充一个错误显示页面数据到resp
-                ErrorHandler(req, resp);
+                ErrorHandler(req, &resp);
                 WriteResponse(conn, req, resp);
+                context->Reset();
+                buf->MoveReadOffset(buf->ReadAbleSize());//出错了就把缓冲区数据清空
                 conn->ShutDown();
                 return;
             }
@@ -837,7 +859,6 @@ private:
                 return;
             }
             //成功接收完毕
-            HttpRequest& req = context->Request();
             //3. 请求路由 + 业务处理
             Route(req, &resp);
             //4. 对HttpResponse 进行组织和发送
@@ -852,15 +873,37 @@ private:
             }
             //否则就继续循环
         }
+        return;
     }
-public:
-    HttpServer();
-    void SetBaseDir(const std::string& basedir);
-    void Get(const std::string& pattern, Handler& handler);
-    void Post(const std::string& pattern, Handler& handler);
-    void Put(const std::string& pattern, Handler& handler);
-    void Delete(const std::string& pattern, Handler& handler);
-    void SetThreadCount(int count);
     void EnableInactiveRelease(int timeout);
-    void Listen();
+public:
+    HttpServer(int port, int timeout = DEFAULT_TIMEOUT) :_server(port) {
+        _server.EnableInactiveRelease(timeout);
+        _server.SetConnectedCallBack(std::bind(&HttpServer::OnConnected, this, std::placeholders::_1));
+        _server.SetMessageCallBack(std::bind(&HttpServer::OnMessage, this, std::placeholders::_1, std::placeholders::_2));
+    }
+    void SetBaseDir(const std::string& basedir) {
+        assert(Utility::IsDirectory(basedir) == true);
+        _basedir = basedir;
+    }
+    //设置或者添加请求（请求的正则表达式）与处理函数的映射关系
+    void Get(const std::string& pattern, const Handler& handler) {
+        _get_route.push_back(std::make_pair(std::regex(pattern), handler));
+    }
+    void Post(const std::string& pattern, const Handler& handler) {
+        _post_route.push_back(std::make_pair(std::regex(pattern), handler));
+
+    }
+    void Put(const std::string& pattern, const Handler& handler) {
+        _put_route.push_back(std::make_pair(std::regex(pattern), handler));
+    }
+    void Delete(const std::string& pattern, const Handler& handler) {
+        _delete_route.push_back(std::make_pair(std::regex(pattern), handler));
+    }
+    void SetThreadCount(int count) {
+        _server.SetThreadCount(count);
+    }
+    void Listen() {
+        _server.Start();
+    }
 };

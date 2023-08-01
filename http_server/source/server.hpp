@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sstream>
 #include <fstream>
+#include <regex>
 #include <vector>
 #include <string>
 #include <cstring>
@@ -16,7 +17,6 @@
 #include <ctime>   
 #include <cstdlib>
 #include <functional>
-#include <regex>
 #include <algorithm>
 
 #include <unistd.h>
@@ -959,7 +959,7 @@ private:
         }
     }
     /*接口并不是世纪的发送接口，而只是吧数据放到了发送缓冲区，启动了可写事件监控*/
-    void SendInLoop(Buffer buf){
+    void SendInLoop(Buffer& buf){
         //如果已经关闭了就直接return
         if (_statu == DISCONNECTED) return;
         //数据放到缓冲区
@@ -1089,7 +1089,7 @@ public:
         Buffer buf;
         buf.WriteAndPush(data, len);
         //将buffer传入SendInLoop
-        _loop->RunInLoop(std::bind(&Connection::SendInLoop, this, buf));
+        _loop->RunInLoop(std::bind(&Connection::SendInLoop, this, std::move(buf)));
     }
     //提供给组件使用者的关闭接口，不会直接关闭，先处理完业务
     void ShutDown() {

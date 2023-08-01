@@ -1,5 +1,5 @@
-request:request.cc
-	g++ -o $@ $^ -std=c++11 
+test:test.cc
+	g++ -o $@ $^ -std=c++11 -lpthread
 .PHONY:clean
 clean:
-	rm -f request
+	rm -f test
