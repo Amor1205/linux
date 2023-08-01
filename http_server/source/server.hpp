@@ -1,6 +1,7 @@
 #ifndef __SERVER_H__
 #define __SERVER_H__
 #include <iostream>
+#include <sstream>
 #include <fstream>
 #include <vector>
 #include <string>
@@ -16,6 +17,7 @@
 #include <cstdlib>
 #include <functional>
 #include <regex>
+#include <algorithm>
 
 #include <unistd.h>
 #include <fcntl.h>

@@ -350,7 +350,7 @@ public:
         _headers.insert({key, val});
     }
     //判断是否存在指定头部字段
-    bool HasHeader(const std::string& key) {
+    bool HasHeader(const std::string& key) const {
         auto it = _headers.find(key);
         if (it == _headers.end()) {
             return false;
@@ -358,7 +358,7 @@ public:
         return true;
     }
     //获取指定头部字段值
-    std::string GetHeader(const std::string& key) {
+    const std::string GetHeader(const std::string& key) const {
         auto it = _headers.find(key);
         if (it == _headers.end()) {
             return "";
@@ -395,7 +395,7 @@ public:
         return std::stol(GetHeader("Content-Length"));
     }
     //判断是否为长链接 长-true 短-false
-    bool IsPersistentConnection() {
+    bool IsPersistentConnection() const {
         //没有Connection字段或者有但是设置值为close 
         bool ret = HasHeader("Connection") && GetHeader("Connection") == "keep-alive";
         if (ret == true) {
@@ -406,7 +406,7 @@ public:
 };
 
 class HttpResponse {
-private:
+public:
     int _statu;
     bool _redirect_flag;
     std::string _redirect_url;
@@ -416,6 +416,15 @@ public:
     HttpResponse() :_redirect_flag(false), _statu(200) {}
     HttpResponse(int statu) :_redirect_flag(false), _statu(statu) {}
     //重置
+    // const std::string& Body() const {
+    //     return _body;
+    // }
+    // const bool RedirectFlag() const {
+    //     return _redirect_flag;
+    // }
+    // int Statu() const {
+    //     return _statu;
+    // }
     void Reset() {
         _statu = 200;
         _redirect_flag = false;
@@ -443,7 +452,7 @@ public:
         }
         return it->second;
     }
-    void SetContent(std::string& body, std::string& type) {
+    void SetContent(const std::string& body, const std::string& type) {
         _body = body;
         SetHeader("Content-Type", type);
     }
@@ -515,7 +524,8 @@ private:
     //解析Http请求行
     bool ParseHttpLine(const std::string& line) {
         std::smatch matches;
-        std::regex e("(GET|HEAD|POST|PUT|DELETE) ([^?]*)(?:\\?(.*)) (HTTP/1\\.[01])(?:\n|\r\n)?");
+        //icase 标志位: 忽略大小写
+        std::regex e("(GET|HEAD|POST|PUT|DELETE) ([^?]*)(?:\\?(.*)) (HTTP/1\\.[01])(?:\n|\r\n)?", std::regex::icase);
         bool ret = std::regex_match(line, matches, e);
         if(ret == false)
         {
@@ -531,6 +541,7 @@ private:
 
         //获取请求方法
         _request._method = matches[1];
+        std::transform(_request._method.begin(), _request._method.end(), _request._method.begin(), ::toupper);
         //获取资源路径，需要进行URL解码操作，但是不用+转space
         _request._path = Utility::UrlDecode(matches[2], false);
         //获取协议版本
@@ -645,6 +656,10 @@ public:
     HttpRequest& Request() {
         return _request;
     }
+    void Reset() {
+        _resp_statu = 200;
+        _recv_statu = RECV_HTTP_LINE;
+    }
     //接收并解析HTTP请求
     void RecvRequest(Buffer* buf) {
         //状态机，不同状态做不同的事情， 但是不要break，因为处理完请求行后，应该立即处理头部，而不是退出等新数据
@@ -660,53 +675,182 @@ public:
 class HttpServer {
 private:
     using Handler = std::function<void(const HttpRequest&, HttpResponse&)>;
+    //如果每次都进行字符串正则匹配效率会低
+    // using Handlers = std::unordered_map<std::string, Handler>;
+    using Handlers = std::unordered_map<std::regex, Handler>;
     //这个资源路径指的是正则表达式，而不是实际的资源路径。
     //匹配成功了就是这个资源路径
-    std::unordered_map<std::string, Handler> _get_route;
-    std::unordered_map<std::string, Handler> _put_route;
-    std::unordered_map<std::string, Handler> _post_route;
-    std::unordered_map<std::string, Handler> _delete_route;
+    Handlers _get_route;
+    Handlers _put_route;
+    Handlers _post_route;
+    Handlers _delete_route;
     std::string _basedir; //资源根目录
     TcpServer _server;
 private:
     //将httpresponse中的要素按照http协议格式进行组织，发送
-    void WriteResponse(PtrConnection& conn, const HttpRequest& req, HttpResponse* resp);
-    //静态资源的请求处理
-    bool FileHandler(const HttpRequest& req, HttpResponse* resp);
-    //功能性请求的分类处理
-    void Dispatcher(const HttpRequest& req, HttpResponse* resp) {
-        if (req._method == "GET") {
-            route_dispatcher(req, resp, _get_route);
+    void WriteResponse(const PtrConnection& conn, const HttpRequest& req,  HttpResponse& resp) {
+        //1. 完善头部字段
+        if (req.IsPersistentConnection() == false) {
+            resp.SetHeader("Connection", "close");
+        }else {
+            resp.SetHeader("Connection", "keep-alive");
         }
+        if (resp._body.empty() == false && resp.HasHeader("Content-Length") == false) {
+            resp.SetHeader("Content-Length", std::to_string(resp._body.size()));
+        }
+        if (resp._body.empty() == false && resp.HasHeader("Content-Type") == false) {
+            resp.SetHeader("Content-Type", "application/octet-stream");
+        }
+        if(resp._redirect_flag == true) {
+            resp.SetHeader("Location", resp._redirect_url);
+        }
+        //2. 将resp中的要素按照http协议格式进行组织
+        std::stringstream resp_str;
+        resp_str << req._version << " " << std::to_string(resp._statu) << " " << Utility::StatuDesc(resp._statu) << "\r\n";
+        for (auto& head : resp._headers) {
+            resp_str << head.first << ": " << head.second << "\r\n";
+        }
+        resp_str << "\r\n";
+        resp_str << resp._body;
+        //3. 发送数据
+        conn->Send(resp_str.str().c_str(), resp_str.str().size());
+
     }
-    void Route(const HttpRequest& req, HttpResponse* resp) {
-        //1. 对请求进行分辨，是一个静态资源请求还是功能性请求
-        // GET HEAD 都先默认为是静态资源请求
-        bool ret = FileHandler(req, resp);
-        if (ret == true) {
-            //请求处理完毕了
-            return;
+    //判断是否是静态资源的请求处理
+    bool IsFileHandler(HttpRequest& req, const HttpResponse* resp) {
+        //1.必须设置了静态资源根目录
+        if (_basedir.empty()) {
+            return false;
         }
-        Dispatcher(req, resp);
+        //2.请求方法必须是GET /HEAD（目前
+        if (req._method != "GET" || req._method != "HEAD") {
+            return false;
+        }
+        //3.请求资源路径必须是一个合法路径
+        if (Utility::ValidPath(req._path) == false) {
+            return false;
+        }
+        //4.请求的资源必须存在
+        //  有一种请求比较特殊，直接就是一个目录，会默认追加上一个index.html
+        //为了避免直接修改请求的资源路径，定义一个临时对象
+        std::string req_path = _basedir + req._path;
+        if (req_path.back() == '/') {
+            req_path += "index.html";
+        }
+        if (Utility::IsRegular(req_path) == false) {
+            return false;
+        }
+        req._path = req_path; //如果请求就是静态资源请求，将path修改为实际存储路径，以便于后边的静态文件的处理
+        return true;
+    }
+    //静态资源的请求处理
+    bool FileHandler(const HttpRequest& req, const HttpResponse* resp) {
+        bool ret = Utility::ReadFile(req._path, resp->_body);
+        if (ret == false) {
+            return false;
+        }
+        std::string mime = Utility::ExtMime(req._path);
+        resp->SetHeader("Content-Type", mime);
+    }
+    bool ErrorHandler(const HttpRequest& req, HttpResponse* resp) {
+        //1. 组织一个错误展示页面，
+        std::string body;
+        body += "<html>";
+        body += "<head>";
+        body += "<meta http-equiv='Content-Type' content='text/html;charset=utf-8'>";
+        body += "</head>";
+        body += "<body>";
+        body += "<h1>";
+        body += std::to_string(resp->_statu);
+        body += " ";
+        body += Utility::StatuDesc(resp->_statu);
+        body += "</h1>";
+        body += "</body>";
+        body += "</html>";
+        //2. 将其作为一个响应正文，放入resp中
+        resp->SetContent(body, "text/html");
+
+    }
+    //功能性请求的分类处理
+    void Dispatcher(const HttpRequest& req, HttpResponse* resp, Handlers& handlers) {
+        //在对应请求方法的路由表中查找是否含有对应资源请求的处理函数，如果有就调用，没有就返回405
+        //思想：路由表中存储的是keyval对， 正则表达式 & 处理函数
+        //使用正则表达式，对请求的字眼路径进行正则匹配，匹配成功就可以使用对应函数进行处理
+        for (auto& handler : handlers) {
+            const std::regex& e = handler.first; 
+            const Handler& functor = handler.second;
+            bool ret = std::regex_match(req._path, req._matches, e);
+            if (ret == false) {
+                continue;
+            }
+            return functor(req, resp); //串入请求信息，和空的resp执行处理函数
+        }
+        resp->_statu = 404;
+    }
+    void Route(HttpRequest& req, HttpResponse* resp) {
+        //1. 对请求进行分辨，是一个静态资源请求还是功能性请求
+        // 静态资源请求 进行静态资源的处理
+        // 功能性请求就通过几个请求路由表来确定是否有处理函数
+        // 如果既不是静态资源请求，在功能性请求路由表也没找到处理函数，就返回404
+        // GET HEAD 都先默认为是静态资源请求
+        if (IsFileHandler(req, resp) == true) {
+            return FileHandler(req, resp);
+        }
+        if (req._method == "GET" || req._method == "HEAD") {
+            return Dispatcher(req, resp, _get_route);
+        }else if(req._method == "PUT") {
+            return Dispatcher(req, resp, _put_route);
+        }else if(req._method == "POST") {
+            return Dispatcher(req, resp, _post_route);
+        }else if(req._method == "DELETE") {
+            return Dispatcher(req, resp, _delete_route);
+        }
+        resp->_statu = 405; // METHOD NOW ALLOWED
+        return;
     }
     //设置上下文
-    void OnConnected();
+    void OnConnected(const PtrConnection& conn) {
+        conn->SetContext(HttpContext());
+        DBG_LOG("NEW CONNECTION %p", conn.get());
+    }
     //缓冲区数据解析+ 处理
     void OnMessage(const PtrConnection& conn, Buffer* buf) {
-        //1. 获取上下文
-        HttpRequest* context = conn->GetContext()->get<HttpRequest>();
-        //2. 通过上下文对缓冲区数据进行解析，得到HttpRequest对象
-        context->RecvHttpRequest(buf);
-        HttpRequest& req = context->Request();
-        HttpResponse resp;
-        //3. 请求路由 + 业务处理
-        Route(req, &resp);
-        //4. 对HttpResponse 进行组织和发送
-        WriteResponse(conn, req, resp);
-        //5. 根据长短连接判断是否关闭连接或者继续处理
-        //短链接直接关闭
-        if (resp.IsPersistentConnection() == false) {
-            conn->ShutDown();
+        while (buf->ReadAbleSize() > 0)
+        {
+            //1. 获取上下文
+            HttpContext* context = conn->GetContext()->get<HttpContext>();
+            //2. 通过上下文对缓冲区数据进行解析，得到HttpRequest对象
+            //  1. 如果缓冲区的数据解析出错，回复出错响应
+            //  2. 如果解析正常，且请求已经获取完毕，才会开始去进行处理
+            context->RecvRequest(buf);
+            HttpResponse resp(context->RecvStatu());
+            if (context->ResponseStatu() >= 400) {
+                //进行错误响应，关闭连接
+                //填充一个错误显示页面数据到resp
+                ErrorHandler(req, resp);
+                WriteResponse(conn, req, resp);
+                conn->ShutDown();
+                return;
+            }
+            if (context->RecvStatu() != RECV_HTTP_OVER) {
+                //当前的请求还没有接收完毕，就退出，等新数据到来再重新处理
+                return;
+            }
+            //成功接收完毕
+            HttpRequest& req = context->Request();
+            //3. 请求路由 + 业务处理
+            Route(req, &resp);
+            //4. 对HttpResponse 进行组织和发送
+            WriteResponse(conn, req, resp);
+            //5. 重置上下文
+            context->Reset();
+            //6. 根据长短连接判断是否关闭连接或者继续处理
+            //短链接直接关闭
+            if (resp.IsPersistentConnection() == false) {
+                conn->ShutDown();
+                return;
+            }
+            //否则就继续循环
         }
     }
 public:
