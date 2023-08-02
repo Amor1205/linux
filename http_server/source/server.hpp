@@ -535,19 +535,24 @@ private:
         return timerfd;
         //每秒钟触发一次超时
     }
-    void ReadTimerFd(){
+    int ReadTimerFd(){
         uint64_t times;
+        //有可能因为其他描述符的事件处理花费时间比较长，然后再处理定时器描述符时间的时候，有可能已经超时了很多次了
+        //read读取到的数据times就是从上一次read之后超时的次数
         int ret = read(_timerfd, &times, 8);
         if(ret < 0)
         {
             ERR_LOG("READ TIMERFD FAILED");
             abort();
         }
-        return;
+        return times;
     }
     void OnTime(){
-        ReadTimerFd();
-        RunTimerTask();
+        //接收实际的超时次数
+        int times = ReadTimerFd();
+        for (int i = 0; i < times; ++i) {
+            RunTimerTask();
+        }
     }
     //添加定时任务
     void TimerAddInLoop(uint64_t id, uint32_t delay, const TaskFunc &cb)
@@ -937,11 +942,17 @@ private:
         //3.关闭描述符(socket)
         _socket.Close();
         //4.如果当前定时器队列中还有定时销毁任务，取消任务，否则也指针操作了
-        if (_loop->HasTimer(_conn_id)) CancelInactiveReleaseInLoop();
+        if (_loop->HasTimer(_conn_id)) {
+            CancelInactiveReleaseInLoop();
+        }
         //5.调用关闭回调函数
         //避免先移除服务器管理的连接信息导致connection被释放，再处理会出错，因此先调用户的。
-        if(_closed_callback) _closed_callback(shared_from_this());
-        if(_server_closed_callback) _server_closed_callback(shared_from_this());
+        if(_closed_callback) {
+            _closed_callback(shared_from_this());
+        }
+        if(_server_closed_callback) {
+            _server_closed_callback(shared_from_this());
+        }
     }
     //连接获取之后，所处的状态下要进行各种设置，给channel 设置事件回调，启动读监控
     void EstablishedInLoop(){
@@ -986,7 +997,7 @@ private:
             }
         }
         if (_out_buffer.ReadAbleSize() == 0){
-            return ReleaseInLoop();
+            return Release();
         }
     }
     //启动非活跃连接超时释放规则
@@ -998,7 +1009,7 @@ private:
             return _loop->TimerRefresh(_conn_id);
         }
         //3. 如果不存在，就新增
-        _loop->TimerAdd(_conn_id, sec, std::bind(&Connection::ReleaseInLoop, this));
+        _loop->TimerAdd(_conn_id, sec, std::bind(&Connection::Release, this));
     }
     void CancelInactiveReleaseInLoop(){
         _enable_inactive_release = false;
