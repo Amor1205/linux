@@ -1,6 +1,6 @@
-test:test.cc
+ptr:ptr.cc
 	g++ -o $@ $^
 .PHONY:clean
 clean:
-	rm -f test
+	rm -f ptr
 
