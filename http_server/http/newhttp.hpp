@@ -141,26 +141,30 @@ std::unordered_map<std::string, std::string> _mime_msg = {
 
 class Util {
     public:
-        //字符串分割函数,将src字符串按照sep字符进行分割，得到的各个字串放到arry中，最终返回字串的数量
-        static size_t Split(const std::string &src, const std::string &sep, std::vector<std::string> *arry) {
+        //字符串分割函数
+        //将src字符串按照sep字符进行分割，得到的各个字串放到array中，最终返回字串的数量
+        static size_t Split(const std::string &src, const std::string &sep, std::vector<std::string> *array) {
             size_t offset = 0;
-            // 有10个字符，offset是查找的起始位置，范围应该是0~9，offset==10就代表已经越界了
+            // 有n个字符，offset是查找的起始位置，范围应该是0~n-1
+            //offset == n就代表已经越界了
             while(offset < src.size()) {
-                size_t pos = src.find(sep, offset);//在src字符串偏移量offset处，开始向后查找sep字符/字串，返回查找到的位置
+                size_t pos = src.find(sep, offset);
+                //在src字符串偏移量offset处，开始向后查找sep字符/子串，返回查找到的位置
                 if (pos == std::string::npos) {//没有找到特定的字符
                     //将剩余的部分当作一个字串，放入arry中
                     if(pos == src.size()) break;
-                    arry->push_back(src.substr(offset));
-                    return arry->size();
+                    array->push_back(src.substr(offset));
+                    return array->size();
                 }
                 if (pos == offset) {
                     offset = pos + sep.size();
                     continue;//当前字串是一个空的，没有内容
                 }
-                arry->push_back(src.substr(offset, pos - offset));
+                array->push_back(src.substr(offset, pos - offset));
+                //更新offset
                 offset = pos + sep.size();
             }
-            return arry->size();
+            return array->size();
         }
         //读取文件的所有内容，将读取的内容放到一个Buffer中
         static bool ReadFile(const std::string &filename, std::string *buf) {

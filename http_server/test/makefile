@@ -1,5 +1,5 @@
-all : client
-client:client1.cc
+all : client server
+client:tcp_client.cc
 	g++ -g -o $@ $^ -std=c++11
 server:server.cc
 	g++ -g -o $@ $^ -std=c++11  -pthread

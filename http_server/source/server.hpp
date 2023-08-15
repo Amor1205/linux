@@ -34,7 +34,7 @@
 #define INF 0
 #define DBG 1
 #define ERR 2
-#define LOG_LEVEL INF
+#define LOG_LEVEL ERR
 #define LOG(level, format, ...) do{\
 	if(level < LOG_LEVEL) break;\
 	time_t t = time(NULL);\
@@ -1138,7 +1138,7 @@ private:
     using AcceptCallBack = std::function<void(int)>;
     AcceptCallBack _accept_callback;
 private:
-    /*监听套接字的读事件回调处理函数 -- 获取新连接，调用_accept_cb函数进行新连接数据处理*/
+    /*监听套接字的读事件回调处理函数 -- 获取新连接，调用_accept_cb函数进行新连接初始化*/
     void HandleRead() {
         int newfd = _socket.Accept();
         if (newfd < 0){
