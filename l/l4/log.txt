@@ -1,0 +1,2 @@
+fd = 1
+It should be printed in the screen.
